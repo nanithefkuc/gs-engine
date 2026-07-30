@@ -1,0 +1,38 @@
+[package]
+name = "gs-engine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Reusable Guruswami-Sudan list-decoding engine"
+license = "MIT"
+repository = "https://github.com/nanithefkuc/gs-engine"
+
+[features]
+default = ["std", "simd"]
+std = ["fff/std", "cafft/std"]
+simd = ["std", "fff/simd", "cafft/simd"]
+diagnostic = []
+
+[[bench]]
+name = "root_extraction"
+harness = false
+
+[[bench]]
+name = "decoder"
+harness = false
+
+[[bench]]
+name = "products"
+harness = false
+
+[[bench]]
+name = "scoring"
+harness = false
+
+[[bench]]
+name = "interpolation"
+harness = false
+
+[dependencies]
+cafft = { git = "https://github.com/nanithefkuc/cafft.git", rev = "ce8f42af56521e86b73a0bf90affa1caf1363f75", default-features = false }
+fff = { git = "https://github.com/nanithefkuc/fff.git", default-features = false }
