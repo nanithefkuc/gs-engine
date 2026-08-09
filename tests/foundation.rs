@@ -3,8 +3,8 @@ use cafft::basis::{
     novel_to_monomial_bytes, novel_to_monomial_with_scratch,
 };
 use cafft::core::transform::TransformPlan;
-use fff::field::{Elem, Field};
-use fff::{Gf8, Gf16};
+use fgf::field::{Elem, Field};
+use fgf::{Gf8, Gf16};
 use gs_engine::ConfigError;
 use gs_engine::geometry::{checked_product, checked_sum, try_zeroed};
 

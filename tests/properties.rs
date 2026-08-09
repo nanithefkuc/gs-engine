@@ -1,6 +1,6 @@
-use fff::field::{Elem, Field};
-use fff::kernel::FieldKernels;
-use fff::{Gf8, Gf16};
+use fgf::field::{Elem, Field};
+use fgf::kernel::FieldKernels;
+use fgf::{Gf8, Gf16};
 use gs_engine::{BaseFieldRoots, Polynomial, base_field_roots};
 
 fn element<F: Field>(value: u64) -> F::Elem {

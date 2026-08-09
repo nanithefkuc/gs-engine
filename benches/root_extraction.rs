@@ -2,9 +2,9 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use cafft::core::kernel::ButterflyKernels;
-use fff::field::Field;
-use fff::kernel::backend_for;
-use fff::{Gf8, Gf16};
+use fgf::field::Field;
+use fgf::kernel::backend_for;
+use fgf::{Gf8, Gf16};
 use gs_engine::{
     AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, Polynomial, RothRuckensteinLimits,
     alekhnovich_roots, roth_ruckenstein_roots,

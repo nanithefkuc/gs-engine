@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
 
 use crate::{ConfigError, Polynomial};
 

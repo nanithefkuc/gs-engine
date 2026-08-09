@@ -1,5 +1,5 @@
-use fff::field::Field;
-use fff::{Gf8, Gf16};
+use fgf::field::Field;
+use fgf::{Gf8, Gf16};
 use gs_engine::{
     AlekhnovichLimits, DecodeError, DecodeScratch, DomainError, EvaluationBackend,
     EvaluationDomain, GsParameters, GsPlan, ParameterLimits, Polynomial,
@@ -16,11 +16,11 @@ fn gf16(value: u16) -> <Gf16 as Field>::Elem {
     Gf16::read(&value.to_le_bytes())
 }
 
-fn polynomial<F: fff::kernel::FieldKernels>(coefficients: &[F::Elem]) -> Polynomial<F> {
+fn polynomial<F: fgf::kernel::FieldKernels>(coefficients: &[F::Elem]) -> Polynomial<F> {
     Polynomial::from_coefficients(coefficients).unwrap()
 }
 
-fn distance<F: fff::kernel::FieldKernels>(
+fn distance<F: fgf::kernel::FieldKernels>(
     candidate: &Polynomial<F>,
     points: &[F::Elem],
     received: &[F::Elem],

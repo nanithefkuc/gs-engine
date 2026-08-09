@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 use cafft::basis::{conversion_scratch_elements, monomial_to_novel_bytes};
 use cafft::core::kernel::ButterflyKernels;
 use cafft::core::transform::TransformPlan;
-use fff::field::{Elem, Field};
-use fff::kernel::backend_for;
-use fff::{Gf8, Gf16};
+use fgf::field::{Elem, Field};
+use fgf::kernel::backend_for;
+use fgf::{Gf8, Gf16};
 use gs_engine::Polynomial;
 
 fn element<F: Field>(value: u64) -> F::Elem {

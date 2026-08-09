@@ -5,8 +5,8 @@ use cafft::basis::{conversion_scratch_elements, monomial_to_novel_bytes, novel_t
 use cafft::core::kernel::ButterflyKernels;
 use cafft::core::transform::TransformPlan;
 use cafft::error::{PlanError, TransformLengthError};
-use fff::kernel::{Backend, backend_for};
-use fff::ops;
+use fgf::kernel::{Backend, backend_for};
+use fgf::ops;
 
 use crate::ConfigError;
 

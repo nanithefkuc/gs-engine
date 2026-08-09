@@ -8,9 +8,9 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
 
-use fff::field::{Elem, Field};
-use fff::kernel::FieldKernels;
-use fff::ops;
+use fgf::field::{Elem, Field};
+use fgf::kernel::FieldKernels;
+use fgf::ops;
 
 use crate::ConfigError;
 use crate::geometry::{checked_product, try_zeroed};

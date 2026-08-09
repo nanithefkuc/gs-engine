@@ -9,8 +9,8 @@ repository = "https://github.com/nanithefkuc/gs-engine"
 
 [features]
 default = ["std", "simd"]
-std = ["fff/std", "cafft/std"]
-simd = ["std", "fff/simd", "cafft/simd"]
+std = ["fgf/std", "cafft/std", "gfm/std"]
+simd = ["std", "fgf/simd", "cafft/simd", "gfm/simd"]
 diagnostic = []
 
 [[bench]]
@@ -34,5 +34,6 @@ name = "interpolation"
 harness = false
 
 [dependencies]
-cafft = { git = "https://github.com/nanithefkuc/cafft.git", rev = "ce8f42af56521e86b73a0bf90affa1caf1363f75", default-features = false }
-fff = { git = "https://github.com/nanithefkuc/fff.git", default-features = false }
+cafft = { path = "../cafft", default-features = false }
+fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
+gfm = { path = "../gfm", default-features = false }

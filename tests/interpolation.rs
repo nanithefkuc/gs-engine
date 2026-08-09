@@ -1,5 +1,5 @@
-use fff::field::{Elem, Field};
-use fff::{Gf8, Gf16};
+use fgf::field::{Elem, Field};
+use fgf::{Gf8, Gf16};
 use gs_engine::{
     BivariatePolynomial, GsParameters, ParameterLimits, Polynomial, interpolate_koetter,
     interpolate_module,
@@ -21,7 +21,7 @@ fn gf8(value: u8) -> <Gf8 as Field>::Elem {
     Gf8::read(&[value])
 }
 
-fn assert_hasse_constraints<F: fff::kernel::FieldKernels>(
+fn assert_hasse_constraints<F: fgf::kernel::FieldKernels>(
     parameters: GsParameters,
     points: &[F::Elem],
     values: &[F::Elem],

@@ -2,7 +2,7 @@
 
 use core::cmp::min;
 
-use fff::kernel::{FieldKernels, backend_for};
+use fgf::kernel::{FieldKernels, backend_for};
 
 use crate::ConfigError;
 

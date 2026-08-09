@@ -12,8 +12,8 @@ pub use module::{MODULE_INTERPOLATION_CROSSOVER, interpolate_module};
 use alloc::vec::Vec;
 use core::fmt;
 
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
 
 #[cfg(feature = "diagnostic")]
 use crate::Polynomial;
@@ -82,6 +82,9 @@ impl ReferenceInterpolationLimits {
 pub enum InterpolationError {
     /// Checked geometry or allocation failed.
     Config(ConfigError),
+    /// The shared weak-Popov reducer rejected the row geometry or termination
+    /// measure.
+    Reduction(gfm::ReduceError),
     /// Point or received-value length differs from the planned code length.
     LengthMismatch {
         /// Planned number of points.
@@ -164,6 +167,7 @@ impl fmt::Display for InterpolationError {
                     "interpolation produced an invalid result: {reason}"
                 )
             }
+            Self::Reduction(error) => error.fmt(formatter),
             Self::ConstraintViolation {
                 point_index,
                 x_order,
@@ -179,6 +183,12 @@ impl fmt::Display for InterpolationError {
 impl From<ConfigError> for InterpolationError {
     fn from(error: ConfigError) -> Self {
         Self::Config(error)
+    }
+}
+
+impl From<gfm::ReduceError> for InterpolationError {
+    fn from(error: gfm::ReduceError) -> Self {
+        Self::Reduction(error)
     }
 }
 

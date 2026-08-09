@@ -3,8 +3,8 @@
 use std::fmt::Write as _;
 use std::process::Command;
 
-use fff::Gf8;
-use fff::field::Field;
+use fgf::Gf8;
+use fgf::field::Field;
 use gs_engine::{
     AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
 };

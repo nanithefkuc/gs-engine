@@ -1,7 +1,8 @@
 use alloc::{vec, vec::Vec};
 
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
+use gfm::{WeakPopovRow, weak_popov};
 
 use crate::{BivariatePolynomial, ConfigError, GsParameters, Polynomial};
 
@@ -50,7 +51,22 @@ pub fn interpolate_module<F: FieldKernels>(
         )?);
     }
 
-    reduce_to_weak_popov(&mut basis, parameters.max_degree())?;
+    let mut shifts = Vec::new();
+    shifts
+        .try_reserve_exact(row_count)
+        .map_err(|_| ConfigError::AllocationFailed {
+            context: "interpolation module shift",
+            elements: row_count,
+            element_size: core::mem::size_of::<usize>(),
+        })?;
+    for column in 0..row_count {
+        shifts.push(column.checked_mul(parameters.max_degree()).ok_or(
+            ConfigError::GeometryOverflow {
+                context: "interpolation module column shift",
+            },
+        )?);
+    }
+    weak_popov::<F, _>(&mut basis, &shifts)?;
     let mut selected = None;
     for polynomial in basis {
         let Some(degree) = polynomial.weighted_degree(parameters.max_degree())? else {
@@ -147,77 +163,29 @@ fn module_row<F: FieldKernels>(
     Ok(BivariatePolynomial::from_y_coefficients(coefficients))
 }
 
-fn reduce_to_weak_popov<F: FieldKernels>(
-    basis: &mut [BivariatePolynomial<F>],
-    y_weight: usize,
-) -> Result<(), InterpolationError> {
-    let mut leading_rows = vec![None; basis.len()];
-    loop {
-        leading_rows.fill(None);
-        let mut collision = None;
-        for (row, polynomial) in basis.iter().enumerate() {
-            let Some(leading) = polynomial.weighted_leading_term(y_weight)? else {
-                continue;
-            };
-            if let Some(previous) = leading_rows[leading.y_degree] {
-                collision = Some((previous, row));
-                break;
-            }
-            leading_rows[leading.y_degree] = Some(row);
-        }
-        let Some((left, right)) = collision else {
-            return Ok(());
-        };
-        reduce_pair(basis, left, right, y_weight)?;
-    }
-}
+impl<F: FieldKernels> WeakPopovRow<F> for BivariatePolynomial<F> {
+    type Error = InterpolationError;
 
-fn reduce_pair<F: FieldKernels>(
-    basis: &mut [BivariatePolynomial<F>],
-    left: usize,
-    right: usize,
-    y_weight: usize,
-) -> Result<(), InterpolationError> {
-    let left_leading =
-        basis[left]
-            .weighted_leading_term(y_weight)?
-            .ok_or(InterpolationError::InvalidResult {
-                reason: "interpolation module reduction selected a zero row",
-            })?;
-    let right_leading =
-        basis[right]
-            .weighted_leading_term(y_weight)?
-            .ok_or(InterpolationError::InvalidResult {
-                reason: "interpolation module reduction selected a zero row",
-            })?;
-    let (target, pivot, target_leading, pivot_leading) =
-        if left_leading.x_degree >= right_leading.x_degree {
-            (left, right, left_leading, right_leading)
-        } else {
-            (right, left, right_leading, left_leading)
-        };
-    let target_coefficient = basis[target]
-        .y_coefficient(target_leading.y_degree)
-        .ok_or(InterpolationError::InvalidResult {
-            reason: "interpolation module leading row disappeared",
-        })?
-        .coefficient(target_leading.x_degree);
-    let pivot_coefficient = basis[pivot]
-        .y_coefficient(pivot_leading.y_degree)
-        .ok_or(InterpolationError::InvalidResult {
-            reason: "interpolation module leading row disappeared",
-        })?
-        .coefficient(pivot_leading.x_degree);
-    let scale = target_coefficient.mul(pivot_coefficient.inv());
-    let shift = target_leading.x_degree - pivot_leading.x_degree;
-    let (target_polynomial, pivot_polynomial) = if target < pivot {
-        let (lower, upper) = basis.split_at_mut(pivot);
-        (&mut lower[target], &upper[0])
-    } else {
-        let (lower, upper) = basis.split_at_mut(target);
-        (&mut upper[0], &lower[pivot])
-    };
-    target_polynomial
-        .add_scaled_x_shifted_assign(scale, pivot_polynomial, shift)
-        .map_err(InterpolationError::from)
+    fn column_count(&self) -> usize {
+        self.y_coefficient_count()
+    }
+
+    fn degree(&self, column: usize) -> Option<usize> {
+        self.y_coefficient(column).and_then(Polynomial::degree)
+    }
+
+    fn coefficient(&self, column: usize, degree: usize) -> F::Elem {
+        self.y_coefficient(column)
+            .map_or(F::Elem::ZERO, |polynomial| polynomial.coefficient(degree))
+    }
+
+    fn add_scaled_shifted_assign(
+        &mut self,
+        scale: F::Elem,
+        pivot: &Self,
+        shift: usize,
+    ) -> Result<(), Self::Error> {
+        self.add_scaled_x_shifted_assign(scale, pivot, shift)
+            .map_err(InterpolationError::from)
+    }
 }

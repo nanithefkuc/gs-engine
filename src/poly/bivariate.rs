@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
 use cafft::core::kernel::ButterflyKernels;
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
 
 use crate::ConfigError;
 use crate::geometry::try_zeroed;

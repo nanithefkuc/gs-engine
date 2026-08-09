@@ -1,6 +1,6 @@
 //! Reusable Guruswami–Sudan list-decoding engine.
 //!
-//! `gs-engine` uses [`fff`] for finite-field arithmetic and [`cafft`] for
+//! `gs-engine` uses [`fgf`] for finite-field arithmetic and [`cafft`] for
 //! additive transforms. Checked geometry helpers reject unrepresentable or
 //! unallocatable decoder layouts before arithmetic begins.
 

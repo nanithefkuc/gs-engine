@@ -2,8 +2,8 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use cafft::core::kernel::ButterflyKernels;
-use fff::kernel::{FieldKernels, backend_for};
-use fff::{Gf8, Gf16};
+use fgf::kernel::{FieldKernels, backend_for};
+use fgf::{Gf8, Gf16};
 use gs_engine::{Polynomial, PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
 fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {

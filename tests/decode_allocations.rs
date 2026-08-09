@@ -3,8 +3,8 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use fff::Gf16;
-use fff::field::Field;
+use fgf::Gf16;
+use fgf::field::Field;
 use gs_engine::{
     AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
     Polynomial,

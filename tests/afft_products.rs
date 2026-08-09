@@ -1,6 +1,6 @@
-use fff::field::Field;
-use fff::kernel::FieldKernels;
-use fff::{Gf8, Gf16};
+use fgf::field::Field;
+use fgf::kernel::FieldKernels;
+use fgf::{Gf8, Gf16};
 use gs_engine::{Polynomial, PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
 fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {

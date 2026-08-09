@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
-use fff::field::Elem;
-use fff::kernel::{FieldKernels, backend_for};
-use fff::ops;
+use fgf::field::Elem;
+use fgf::kernel::{FieldKernels, backend_for};
+use fgf::ops;
 
 use crate::ConfigError;
 use crate::geometry::try_zeroed;

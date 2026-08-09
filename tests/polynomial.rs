@@ -1,7 +1,7 @@
 use cafft::core::kernel::ButterflyKernels;
-use fff::field::{Elem, Field};
-use fff::kernel::backend_for;
-use fff::{Gf8, Gf16};
+use fgf::field::{Elem, Field};
+use fgf::kernel::backend_for;
+use fgf::{Gf8, Gf16};
 use gs_engine::{BivariatePolynomial, Polynomial, PolynomialError, WeightedTerm};
 
 fn powers<F: ButterflyKernels>(start: usize, count: usize) -> Vec<F::Elem> {

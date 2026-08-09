@@ -2,8 +2,8 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 use cafft::core::kernel::ButterflyKernels;
-use fff::field::Field;
-use fff::kernel::{Backend, backend_for};
+use fgf::field::Field;
+use fgf::kernel::{Backend, backend_for};
 
 use crate::{BivariatePolynomial, ConfigError, Polynomial, PolynomialProductScratch};
 

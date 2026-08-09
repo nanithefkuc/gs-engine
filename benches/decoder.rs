@@ -2,9 +2,9 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use cafft::core::kernel::ButterflyKernels;
-use fff::field::{Elem, Field};
-use fff::kernel::{FieldKernels, backend_for};
-use fff::{Gf8, Gf16};
+use fgf::field::{Elem, Field};
+use fgf::kernel::{FieldKernels, backend_for};
+use fgf::{Gf8, Gf16};
 use gs_engine::{
     AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, DecodeScratch, EvaluationDomain,
     GsParameters, GsPlan, KoetterScratch, ParameterLimits, Polynomial, alekhnovich_roots,

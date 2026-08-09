@@ -259,8 +259,8 @@ fn ensure_len<T: Default + Clone>(
 mod tests {
     use alloc::{vec, vec::Vec};
 
-    use fff::Gf16;
-    use fff::field::Field;
+    use fgf::Gf16;
+    use fgf::field::Field;
 
     use super::score_candidates;
     use crate::{DecodeScratch, EvaluationDomain, Polynomial};
