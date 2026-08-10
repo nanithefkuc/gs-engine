@@ -8,7 +8,8 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use fgf::field::Elem;
 use fgf::{Gf8, Gf16};
 use gs_engine::{
-    BivariatePolynomial, GsParameters, KoetterScratch, interpolate_koetter_into, interpolate_module,
+    BivariatePolynomial, GsParameters, InterpolationPlan, KoetterScratch, ModuleScratch,
+    interpolate_koetter_into, interpolate_module, interpolate_module_into,
 };
 
 use common::{
@@ -74,6 +75,18 @@ fn run_field<F: ButterflyKernels>(
         let mut output = BivariatePolynomial::zero();
         interpolate_koetter_into::<F>(parameters, &points, &received, &mut scratch, &mut output)
             .unwrap();
+        let plan: InterpolationPlan<F> = InterpolationPlan::new(parameters, &points).unwrap();
+        let mut module_scratch = ModuleScratch::new();
+        let mut module_output = BivariatePolynomial::zero();
+        interpolate_module_into(
+            parameters,
+            &points,
+            &received,
+            &plan,
+            &mut module_scratch,
+            &mut module_output,
+        )
+        .unwrap();
         group.bench_function(
             BenchmarkId::new("forced-koetter", format!("{geometry}/prepared-true")),
             |bencher| {
@@ -102,6 +115,23 @@ fn run_field<F: ButterflyKernels>(
                         )
                         .unwrap(),
                     );
+                });
+            },
+        );
+        group.bench_function(
+            BenchmarkId::new("forced-module", format!("{geometry}/prepared-true")),
+            |bencher| {
+                bencher.iter(|| {
+                    interpolate_module_into(
+                        parameters,
+                        black_box(&points),
+                        black_box(&received),
+                        &plan,
+                        &mut module_scratch,
+                        &mut module_output,
+                    )
+                    .unwrap();
+                    black_box(&module_output);
                 });
             },
         );
