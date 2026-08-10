@@ -2,3 +2,4 @@
 .plans/
 /external-bench/sources/
 /external-bench/controller/target/
+/external-bench/results/

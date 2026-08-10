@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
 
 ### Added
+- External decoder comparison harness: a standalone controller crate
+  (`external-bench/controller`) drives separate-process adapters over a frozen
+  `.gsf` fixture corpus with a `.gso` result protocol, field-isomorphism
+  verification, and a validate/run/aggregate pipeline. A DECODING (GPL) adapter
+  builds a verified GF(2)-linear GF16 isomorphism and agrees with `gs-engine`
+  on the complete frozen set; a Lambdaworks adapter labels the baseline
+  native-prime and rejects binary fixtures loudly. GPL code is linked only into
+  standalone adapter executables and never into the MIT crate or the
+  controller.
 - Geometry-aware automatic strategy selection: every interpolation, product,
   candidate-scoring, and root-extraction crossover now resolves through pure,
   backend-explicit cost keys in the new `cost` module (`select_interpolation`,

@@ -28,8 +28,8 @@ pub enum AdapterStatus {
     Radius,
     /// May return a subset or hint-assisted result.
     Contains,
-    /// Fixture cannot be represented by this decoder.
-    Unsupported,
+    /// Fixture cannot be represented by this decoder; carries the reason.
+    Unsupported(String),
     /// Adapter failed; carries its message.
     Error(String),
 }
@@ -98,16 +98,14 @@ fn parse_output(stdout: &str, field: FieldTag) -> Result<AdapterRun, String> {
             .ok_or_else(|| format!("adapter line without '=': {line:?}"))?;
         match key {
             "status" => {
-                let parsed = match value.split_once(':') {
-                    Some(("error", message)) => AdapterStatus::Error(message.to_string()),
-                    _ => match value {
-                        "complete" => AdapterStatus::Complete,
-                        "radius" => AdapterStatus::Radius,
-                        "contains" => AdapterStatus::Contains,
-                        "unsupported" => AdapterStatus::Unsupported,
-                        "error" => AdapterStatus::Error(String::new()),
-                        other => return Err(format!("unknown adapter status {other:?}")),
-                    },
+                let (head, message) = value.split_once(':').unwrap_or((value, ""));
+                let parsed = match head {
+                    "complete" => AdapterStatus::Complete,
+                    "radius" => AdapterStatus::Radius,
+                    "contains" => AdapterStatus::Contains,
+                    "unsupported" => AdapterStatus::Unsupported(message.to_string()),
+                    "error" => AdapterStatus::Error(message.to_string()),
+                    other => return Err(format!("unknown adapter status {other:?}")),
                 };
                 if status.replace(parsed).is_some() {
                     return Err("adapter emitted more than one status".into());
@@ -151,7 +149,7 @@ pub fn classify(run: &AdapterRun, fixture: &Fixture) -> Class {
     let expected = normalize_set(&fixture.expected_candidates, fixture.field);
     match &run.status {
         AdapterStatus::Error(_) => Class::Error,
-        AdapterStatus::Unsupported => Class::Unsupported,
+        AdapterStatus::Unsupported(_) => Class::Unsupported,
         AdapterStatus::Contains => {
             if is_subset(&run.candidates, &expected) {
                 Class::ContainsOnly

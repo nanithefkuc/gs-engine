@@ -43,3 +43,22 @@ printf '%s\n' "decoding_sha256=$sha256"
 printf '%s\n' "decoding_backend=$backend"
 printf '%s\n' "decoding_cflags=$custom_flags"
 printf '%s\n' "decoding_source=$source_dir"
+
+############################################################
+#
+# Build the standalone decoding-gs adapter, linking the
+# (GPL) libdecoding.a into this separate executable only.
+#
+############################################################
+
+adapter_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+adapter_cflags=${ADAPTER_CFLAGS:--O2 -std=gnu11 -Wall -Wextra}
+
+cc $adapter_cflags -I"$source_dir/include" \
+    -o "$adapter_dir/decoding-gs" \
+    "$adapter_dir/adapter.c" \
+    "$source_dir/libdecoding.a" \
+    -lgmp -lm
+
+printf '%s\n' "decoding_adapter=$adapter_dir/decoding-gs"
+printf '%s\n' "decoding_adapter_cflags=$adapter_cflags"
