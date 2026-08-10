@@ -104,7 +104,7 @@ The primary decoding API is `GsPlan::decode_into(received, scratch, output)`.
 
 ## Benchmarks and crossover policy
 
-Each benchmark prints the field and the runtime-selected FGF backend. Run the
+Each benchmark prints the field and the runtime-selected SIMD backend. Run the
 matrix explicitly with:
 
 ```text

@@ -60,10 +60,10 @@ fn child_result(backend: Option<&str>) -> String {
         .env(CHILD_ENV, "1");
     match backend {
         Some(backend) => {
-            command.env("FFF_BACKEND", backend);
+            command.env("SIMD_BACKEND", backend);
         }
         None => {
-            command.env_remove("FFF_BACKEND");
+            command.env_remove("SIMD_BACKEND");
         }
     }
     let output = command.output().unwrap();
