@@ -8,8 +8,8 @@ use crate::evaluate::score_candidates;
 use crate::roots::alekhnovich_roots_into;
 use crate::{
     AlekhnovichLimits, ConfigError, DecodeScratch, DomainError, EvaluationDomain, GsParameters,
-    InterpolationError, InterpolationPlan, MODULE_INTERPOLATION_CROSSOVER, Polynomial, RootError,
-    interpolate_koetter_into, interpolate_module_into,
+    InterpolationError, InterpolationPlan, Polynomial, RootError, interpolate_koetter_into,
+    interpolate_module_into,
 };
 
 /// Failure while constructing or executing an end-to-end GS decoder.
@@ -208,7 +208,17 @@ impl<F: ButterflyKernels> GsPlan<F> {
             });
         }
 
-        let interpolation = if self.parameters.code_length() >= MODULE_INTERPOLATION_CROSSOVER {
+        let interpolation_backend = crate::cost::select_interpolation(crate::cost::InterpolationCostKey {
+            field_bytes: F::BYTES,
+            backend: crate::cost::BackendClass::detect::<F>(),
+            domain: self.domain.backend().into(),
+            points: self.parameters.code_length(),
+            multiplicity: self.parameters.multiplicity(),
+            y_degree: self.parameters.y_degree(),
+            weighted_degree: self.parameters.weighted_degree(),
+            prepared: self.domain.transform_plan().is_some(),
+        });
+        let interpolation = if interpolation_backend == crate::cost::InterpolationBackend::Module {
             interpolate_module_into::<F>(
                 self.parameters,
                 self.domain.points(),

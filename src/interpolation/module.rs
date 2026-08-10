@@ -11,10 +11,8 @@ use super::{
     InterpolationError, InterpolationPlan, binomial_odd, validate_inputs, validate_result,
 };
 
-/// Conservative measured crossover in code length for the weak-Popov module backend.
-///
-/// The module backend is ahead at length eight for both GF8/GF16 and
-/// scalar/GFNI. Kötter remains marginally faster for scalar GF16 at length four.
+/// Code-length crossover at or above which weak-Popov module interpolation is
+/// chosen over iterative Kötter. See `BENCHMARKS.md`.
 pub const MODULE_INTERPOLATION_CROSSOVER: usize = 8;
 
 /// Reusable received-interpolant, power, packed-basis, and reduction storage for
