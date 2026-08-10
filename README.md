@@ -108,17 +108,15 @@ Each benchmark prints the field and the runtime-selected FGF backend. Run the
 matrix explicitly with:
 
 ```text
-SIMD_BACKEND=scalar cargo bench --bench interpolation
-SIMD_BACKEND=gfni  cargo bench --bench interpolation
-SIMD_BACKEND=scalar cargo bench --bench products
-SIMD_BACKEND=gfni  cargo bench --bench products
-SIMD_BACKEND=scalar cargo bench --bench root_extraction
-SIMD_BACKEND=gfni  cargo bench --bench root_extraction
-SIMD_BACKEND=scalar cargo bench --bench scoring
-SIMD_BACKEND=gfni  cargo bench --bench scoring
-SIMD_BACKEND=scalar cargo bench --bench decoder
-SIMD_BACKEND=gfni  cargo bench --bench decoder
+./scripts/run.sh
+SIMD_BACKEND=scalar ./scripts/run.sh
 ```
+
+The command runs all five Criterion groups with `internals` enabled and stores
+confidence intervals, Criterion's machine-readable estimates, allocation
+count/bytes, retained bytes, hardware, rustc, selected backend, field geometry,
+and repository revisions under `target/benchmark-record/`. Arguments are
+forwarded to Criterion, so a benchmark ID substring can select one workload.
 
 `gfni` requests fall back to a supported backend on hosts that cannot execute
 GFNI. Production crossover constants are exported by the crate. Product

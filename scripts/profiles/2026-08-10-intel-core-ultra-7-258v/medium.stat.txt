@@ -1,0 +1,32 @@
+# started on Mon Aug 10 12:45:47 2026
+
+
+ Performance counter stats for 'cargo bench --all-features --bench decoder -- warmed-changed-word/gf16/v3_gfni_crypto/additive/n16/k4 --profile-time 1':
+
+                 0      context-switches:u               #      0.0 cs/sec  cs_per_second     
+                 0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
+              7594      page-faults:u                    #   5911.3 faults/sec  page_faults_per_second
+           1284.66 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized       
+             52442      cpu_core/branch-misses/u         #      1.9 %  branch_miss_rate         (98.82%)
+           2728789      cpu_core/branches/u              #      2.1 M/sec  branch_frequency     (98.82%)
+           7177765      cpu_core/cpu-cycles/u            #      0.0 GHz  cycles_frequency       (98.82%)
+          13560340      cpu_core/instructions/u          #      1.9 instructions  insn_per_cycle  (98.82%)
+           2255063      cpu_atom/branch-misses/u         #      0.1 %  branch_miss_rate         (72.30%)
+        2708046314      cpu_atom/branches/u              #   2108.0 M/sec  branch_frequency     (72.32%)
+        4548770059      cpu_atom/cpu-cycles/u            #      3.5 GHz  cycles_frequency       (72.47%)
+       15654337089      cpu_atom/instructions/u          #      3.4 instructions  insn_per_cycle  (72.50%)
+             TopdownL1 (cpu_core)                        #     37.2 %  tma_backend_bound      
+                                                         #     13.5 %  tma_bad_speculation    
+                                                         #     26.7 %  tma_frontend_bound     
+                                                         #     22.6 %  tma_retiring             (98.82%)
+             TopdownL1 (cpu_atom)                        #      2.1 %  tma_bad_speculation      (72.53%)
+                                                         #     48.4 %  tma_backend_bound        (72.51%)
+                                                         #      0.0 %  tma_frontend_bound       (81.64%)
+                                                         #      0.0 %  tma_retiring             (81.49%)
+
+       1.288587751 seconds time elapsed
+
+       1.231200000 seconds user
+       0.044701000 seconds sys
+
+

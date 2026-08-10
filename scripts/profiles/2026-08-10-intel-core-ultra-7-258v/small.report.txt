@@ -1,0 +1,263 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu_atom/cycles/Pu'
+# Event count (approx.): 4006662542
+#
+# Children      Self  Command          Shared Object             Symbol                                                                                                                                                                                                                                                                                                                                                                          
+# ........  ........  ...............  ........................  ................................................................................................................................................................................................................................................................................................................................................................................
+#
+    27.52%    23.00%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] alloc::raw_vec::RawVecInner<A>::finish_grow
+            |          
+            |--12.23%--alloc::raw_vec::RawVecInner<A>::finish_grow
+            |          |          
+            |          |--3.44%--alloc::raw_vec::RawVecInner<A>::finish_grow
+            |          |          
+            |          |--1.42%--gs_engine::poly::bivariate::BivariatePolynomial<F>::has_root
+            |          |          
+            |           --1.27%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at
+            |          
+            |--5.24%--0x1
+            |          |          
+            |           --5.06%--alloc::raw_vec::RawVecInner<A>::finish_grow
+            |          
+            |--4.30%--0x2
+            |          alloc::raw_vec::RawVecInner<A>::finish_grow
+            |          
+             --1.09%--0x9
+
+    18.34%    14.74%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
+            |          
+            |--8.43%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
+            |          |          
+            |           --2.37%--alloc::raw_vec::RawVecInner<A>::finish_grow
+            |          
+             --6.54%--0x9
+                       gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
+
+    11.36%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000001
+            |
+            ---0x1
+               |          
+               |--5.06%--alloc::raw_vec::RawVecInner<A>::finish_grow
+               |          
+                --2.82%--gs_engine::interpolation::koetter::interpolate_koetter_with_scratch
+
+    10.94%     9.91%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
+            |          
+            |--7.24%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
+            |          
+             --1.52%--0x3
+                       gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
+
+     9.82%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000009
+            |
+            ---0x9
+               |          
+               |--8.81%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
+               |          |          
+               |           --1.64%--alloc::raw_vec::RawVecInner<A>::finish_grow
+               |          
+                --1.00%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at
+
+     6.82%     6.73%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::koetter::interpolate_koetter_with_scratch
+            |          
+            |--3.00%--gs_engine::decoder::GsPlan<F>::decode_into
+            |          gs_engine::interpolation::koetter::interpolate_koetter_with_scratch
+            |          
+             --2.82%--0x1
+                       gs_engine::interpolation::koetter::interpolate_koetter_with_scratch
+
+     6.29%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000002
+            |
+            ---0x2
+               |          
+                --4.30%--alloc::raw_vec::RawVecInner<A>::finish_grow
+
+     6.16%     5.89%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::split_factor
+     6.01%     5.01%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at
+            |          
+             --2.64%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at
+
+     5.55%     2.10%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::decoder::GsPlan<F>::decode_into
+            |          
+            |--3.45%--gs_engine::decoder::GsPlan<F>::decode_into
+            |          |          
+            |           --3.09%--gs_engine::interpolation::koetter::interpolate_koetter_with_scratch
+            |          
+             --1.91%--0x3
+                       criterion::bencher::Bencher<M>::iter
+                       gs_engine::decoder::GsPlan<F>::decode_into
+
+     3.98%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000003
+            |
+            ---0x3
+               |          
+               |--2.28%--criterion::bencher::Bencher<M>::iter
+               |          gs_engine::decoder::GsPlan<F>::decode_into
+               |          
+                --1.61%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
+
+     3.35%     1.90%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated
+            |          
+             --2.72%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated
+                       |          
+                        --1.27%--alloc::raw_vec::RawVecInner<A>::finish_grow
+
+     3.25%     2.89%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::gcd
+            |          
+             --2.43%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::gcd
+
+     2.28%     0.00%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] criterion::bencher::Bencher<M>::iter
+            |
+            ---criterion::bencher::Bencher<M>::iter
+               gs_engine::decoder::GsPlan<F>::decode_into
+
+     2.09%     2.00%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::pow_mod
+     2.04%     2.04%  decoder-b1bbad7  libc.so.6                 [.] malloc
+     2.04%     0.00%  decoder-b1bbad7  libc.so.6                 [.] __libc_malloc (inlined)
+            |
+            ---__libc_malloc (inlined)
+
+     1.78%     1.69%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::bivariate::BivariatePolynomial<F>::has_root
+            |          
+             --1.32%--alloc::raw_vec::RawVecInner<A>::finish_grow
+                       gs_engine::poly::bivariate::BivariatePolynomial<F>::has_root
+
+     1.72%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x000000030679f894
+            |
+            ---0x30679f894
+
+     1.64%     1.55%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::base_field_roots
+     1.64%     1.64%  decoder-b1bbad7  libc.so.6                 [.] cfree
+     1.64%     0.00%  decoder-b1bbad7  libc.so.6                 [.] __libc_free (inlined)
+            |
+            ---__libc_free (inlined)
+
+     1.62%     1.53%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] core::ptr::drop_in_place<gs_engine::roots::roth_ruckenstein::Frame<fgf::field::gf8::Gf8>>
+            |          
+             --1.35%--core::ptr::drop_in_place<gs_engine::roots::roth_ruckenstein::Frame<fgf::field::gf8::Gf8>>
+
+     1.61%     1.61%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::validate_result
+            |          
+             --1.06%--gs_engine::interpolation::validate_result
+
+     1.46%     1.00%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::alekhnovich::alekhnovich_roots
+     1.09%     0.36%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::bivariate::BivariatePolynomial<F>::divide_by_x_power
+     1.00%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x000000010679f894
+            |
+            ---0x10679f894
+
+
+
+# Samples: 1  of event 'cpu_core/cycles/Pu'
+# Event count (approx.): 500500
+#
+# Children      Self  Command          Shared Object         Symbol                
+# ........  ........  ...............  ....................  ......................
+#
+   100.00%   100.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x000000000002aa0d
+            |
+            ---0x7fd65f301967
+               0x7fd65f302be0
+               0x7fd65f3013df
+               0x7fd65f304b90
+               0x7fd65f2f34f0
+               0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f301967
+            |
+            ---0x7fd65f301967
+               0x7fd65f302be0
+               0x7fd65f3013df
+               0x7fd65f304b90
+               0x7fd65f2f34f0
+               0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f302be0
+            |
+            ---0x7fd65f302be0
+               0x7fd65f3013df
+               0x7fd65f304b90
+               0x7fd65f2f34f0
+               0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f3013df
+            |
+            ---0x7fd65f3013df
+               0x7fd65f304b90
+               0x7fd65f2f34f0
+               0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f304b90
+            |
+            ---0x7fd65f304b90
+               0x7fd65f2f34f0
+               0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f2f34f0
+            |
+            ---0x7fd65f2f34f0
+               0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f2f0531
+            |
+            ---0x7fd65f2f0531
+               0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f2ebb95
+            |
+            ---0x7fd65f2ebb95
+               0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f2eb2c5
+            |
+            ---0x7fd65f2eb2c5
+               0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f2ead8c
+            |
+            ---0x7fd65f2ead8c
+               0x7fd65f30aa0d
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007fd65f30aa0d
+            |
+            ---0x7fd65f30aa0d
+
+
+
+#
+# (Tip: To see list of saved events and attributes: perf evlist -v)
+#
