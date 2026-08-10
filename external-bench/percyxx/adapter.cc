@@ -36,7 +36,7 @@ uint64_t hasseop = 0, kotter_usec = 0;
 #include <cstring>
 #include <cstdint>
 #include <string>
-#include <vector>
+#include <chrono>
 #include <unordered_map>
 #include <set>
 
@@ -521,8 +521,7 @@ int main(int argc, char** argv) {
             RSDecoder_GF2E dec;
             vector< RecoveryPoly<GF2EX> > polys;
             if (max_degree == 0) {
-                // Kotter divides by v=0; handle degree-0 directly: all constants
-                // agreeing with >= t of the received points.
+                auto _t0 = std::chrono::steady_clock::now();
                 map<uint16_t, unsigned long> counts;
                 for (unsigned long i = 0; i < fx.n; ++i) {
                     const vector<uint8_t>& rb = fx.received[i];
@@ -531,13 +530,19 @@ int main(int argc, char** argv) {
                 }
                 vector<uint16_t> consts;
                 for (auto& pr : counts) if (pr.second >= t) consts.push_back(pr.first);
+                auto _t1 = std::chrono::steady_clock::now();
                 printf("status=radius\n");
+                printf("decode-ns=%lld\n", std::chrono::duration_cast<std::chrono::nanoseconds>(_t1 - _t0).count());
                 for (uint16_t c : consts) printf("candidate=%s\n", hex_elem_gf16(c).c_str());
                 fflush(stdout);
                 return 0;
             }
+            auto _t0 = std::chrono::steady_clock::now();
             polys = dec.findpolys_gs((unsigned int)max_degree, (unsigned int)t, goods, indices, shares);
+            auto _t1 = std::chrono::steady_clock::now();
+            long long _dns = std::chrono::duration_cast<std::chrono::nanoseconds>(_t1 - _t0).count();
             printf("status=radius\n");
+            printf("decode-ns=%lld\n", _dns);
             for (auto& rp : polys) {
                 const GF2EX& phi = rp.phi;
                 long d = deg(phi);
@@ -572,18 +577,25 @@ int main(int argc, char** argv) {
     }
     RSDecoder_GF2E dec;
     if (max_degree == 0) {
+        auto _t0 = std::chrono::steady_clock::now();
         map<uint8_t, unsigned long> counts;
         for (unsigned long i = 0; i < fx.n; ++i) counts[fx.received[i][0]]++;
         vector<uint8_t> consts;
         for (auto& pr : counts) if (pr.second >= t) consts.push_back(pr.first);
+        auto _t1 = std::chrono::steady_clock::now();
         printf("status=radius\n");
+        printf("decode-ns=%lld\n", std::chrono::duration_cast<std::chrono::nanoseconds>(_t1 - _t0).count());
         for (uint8_t c : consts) printf("candidate=%s\n", hex_elem_gf8(c).c_str());
         fflush(stdout);
         return 0;
     }
+    auto _t0 = std::chrono::steady_clock::now();
     vector< RecoveryPoly<GF2EX> > polys =
         dec.findpolys_gs((unsigned int)max_degree, (unsigned int)t, goods, indices, shares);
+    auto _t1 = std::chrono::steady_clock::now();
+    long long _dns = std::chrono::duration_cast<std::chrono::nanoseconds>(_t1 - _t0).count();
     printf("status=radius\n");
+    printf("decode-ns=%lld\n", _dns);
     for (auto& rp : polys) {
         const GF2EX& phi = rp.phi;
         long d = deg(phi);

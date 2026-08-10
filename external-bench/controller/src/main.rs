@@ -26,7 +26,8 @@ fn main() -> ExitCode {
             (Some(exe), Some(dir)) => run(Path::new(exe), Path::new(dir)),
             _ => Err("usage: gs-external-bench run <adapter-exe> <fixtures-dir>".into()),
         },
-        _ => Err("usage: gs-external-bench <validate|run> ...".into()),
+        Some("bench") => bench(&args[2..]),
+        _ => Err("usage: gs-external-bench <validate|run|bench> ...".into()),
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,
@@ -122,4 +123,95 @@ fn print_discrepancy(expected: &[Vec<Vec<u8>>], got: &[Vec<Vec<u8>>]) {
     };
     println!("    expected: {}", render(expected));
     println!("    adapter:  {}", render(got));
+}
+
+fn bench(args: &[String]) -> Result<bool, String> {
+    // bench <repetitions> <fixtures-dir> [adapter-exe...]
+    let reps: usize = args
+        .first()
+        .ok_or("usage: gs-external-bench bench <repetitions> <fixtures-dir> [adapter-exe...]")?
+        .parse()
+        .map_err(|_| "repetitions must be a positive integer")?;
+    let dir = Path::new(
+        args.get(1)
+            .ok_or("usage: gs-external-bench bench <repetitions> <fixtures-dir> [adapter-exe...]")?,
+    );
+    let adapters: Vec<PathBuf> = args[2..].iter().map(PathBuf::from).collect();
+
+    let fixtures = collect_fixtures(dir)?;
+    // Header
+    print!("{:<34} {:>6} {:>12} {:>12}", "fixture", "cands", "gs-engine", "gs-decode");
+    for adapter in &adapters {
+        let label = adapter
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .replace("-gs", "");
+        print!(" {:>12}", label);
+    }
+    println!();
+
+    let mut all_ok = true;
+    for path in &fixtures {
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| format!("reading {}: {error}", path.display()))?;
+        let parsed = fixture::parse(&text)?;
+        let expected = field::normalize_set(&parsed.expected_candidates, parsed.field);
+        let name = parsed.name.clone();
+        // gs-engine cold: construction + decode (new scratch each run).
+        let engine_ns = median(reps, || {
+            let start = std::time::Instant::now();
+            let _ = reference::decode(&parsed);
+            start.elapsed().as_nanos()
+        });
+
+        // gs-engine warm: decode_into only (plan + scratch pre-built).
+        let warm_ns = reference::decode_warm(&parsed, reps);
+
+        // Each adapter: report its self-timed decode-ns (decode-only, excluding
+        // process startup, parsing, and field mapping).
+        let mut adapter_ns: Vec<u64> = Vec::new();
+        for adapter in &adapters {
+            let exe = adapter.clone();
+            let fixture_path = path.clone();
+            let field = parsed.field;
+            let mut samples: Vec<u64> = (0..reps)
+                .map(|_| {
+                    match adapter::run(&exe, &fixture_path, field) {
+                        Ok(run) => {
+                            let class = adapter::classify(&run, &parsed);
+                            if matches!(class, adapter::Class::Discrepancy | adapter::Class::Error)
+                            {
+                                all_ok = false;
+                            }
+                            run.decode_ns
+                        }
+                        Err(_) => {
+                            all_ok = false;
+                            0
+                        }
+                    }
+                })
+                .collect();
+            samples.sort();
+            adapter_ns.push(samples[samples.len() / 2]);
+        }
+
+        print!("{name:<34} {:>6} {:>9.1} us {:>9.1} us", expected.len(), engine_ns as f64 / 1000.0, warm_ns as f64 / 1000.0);
+        for &ns in &adapter_ns {
+            print!(" {:>9.1} us", ns as f64 / 1000.0);
+        }
+        println!();
+    }
+    println!("\n(reps={reps}, median, us = microseconds)");
+    println!("gs-engine  = construction + decode (cold, new scratch each run)");
+    println!("gs-decode  = decode_into only (plan + scratch pre-built, warmed)");
+    println!("adapters   = self-timed decode (excludes startup/parse/field-map)");
+    Ok(all_ok)
+}
+
+fn median<F: FnMut() -> u128>(reps: usize, mut f: F) -> u128 {
+    let mut samples: Vec<u128> = (0..reps).map(|_| f()).collect();
+    samples.sort();
+    samples[samples.len() / 2]
 }

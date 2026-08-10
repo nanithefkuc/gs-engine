@@ -35,12 +35,12 @@ pub enum AdapterStatus {
 }
 
 /// Parsed adapter output.
-#[derive(Clone, Debug)]
 pub struct AdapterRun {
     /// Declared status.
     pub status: AdapterStatus,
-    /// Normalized candidate set (empty for unsupported/error).
     pub candidates: Vec<Vec<Vec<u8>>>,
+    /// Adapter-reported decode-only time in nanoseconds (0 if not reported).
+    pub decode_ns: u64,
 }
 
 /// Comparison class of an adapter run against the frozen expected set.
@@ -79,6 +79,7 @@ pub fn run(
                 stderr.trim()
             )),
             candidates: Vec::new(),
+            decode_ns: 0,
         });
     }
     let stdout = String::from_utf8(output.stdout)
@@ -89,6 +90,7 @@ pub fn run(
 fn parse_output(stdout: &str, field: FieldTag) -> Result<AdapterRun, String> {
     let mut status = None;
     let mut candidates = Vec::new();
+    let mut decode_ns = 0;
     for line in stdout.lines() {
         if line.is_empty() {
             continue;
@@ -112,7 +114,9 @@ fn parse_output(stdout: &str, field: FieldTag) -> Result<AdapterRun, String> {
                 }
             }
             "candidate" => candidates.push(parse_candidate(value, field)?),
-            "field-id" => {}
+            "decode-ns" => {
+                decode_ns = value.parse().unwrap_or(0);
+            }
             other => return Err(format!("unknown adapter key {other:?}")),
         }
     }
@@ -120,6 +124,7 @@ fn parse_output(stdout: &str, field: FieldTag) -> Result<AdapterRun, String> {
     Ok(AdapterRun {
         candidates: normalize_set(&candidates, field),
         status,
+        decode_ns,
     })
 }
 

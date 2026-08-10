@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <time.h>
 #include <decoding/decoding.h>
 
 /* Two DECODING rings in one translation unit (see samples/sample3.c). Each is
@@ -520,7 +520,7 @@ static void print_candidate(int m, const unsigned *f, int len) {
  * radius): every constant whose codeword is within tau of the received word. */
 static void decode_k1(const struct fixture *fx) {
     unsigned c, size = (1u << fx->m);
-    printf("status=radius\n");
+    struct timespec _t0, _t1; clock_gettime(CLOCK_MONOTONIC, &_t0);
     for (c = 0; c < size; c++) {
         int dist = 0, i;
         for (i = 0; i < fx->n; i++)
@@ -530,6 +530,10 @@ static void decode_k1(const struct fixture *fx) {
             print_candidate(fx->m, &f, 1);
         }
     }
+    clock_gettime(CLOCK_MONOTONIC, &_t1);
+    long long _dns = (long long)(_t1.tv_sec - _t0.tv_sec) * 1000000000LL + (long long)(_t1.tv_nsec - _t0.tv_nsec);
+    printf("status=radius\n");
+    printf("decode-ns=%lld\n", _dns);
 }
 
 static void decode_general(const struct fixture *fx, const struct isomorphism *iso) {
@@ -544,10 +548,13 @@ static void decode_general(const struct fixture *fx, const struct isomorphism *i
         drecv[i] = iso->fwd[fx->received[i]];
     }
 
-    if (m == 8) run_gs_gf8(dsupp, drecv, n, k, tau, &codewords, &nc);
-    else        run_gs_gf16(dsupp, drecv, n, k, tau, &codewords, &nc);
+    struct timespec _t0, _t1;
+    if (m == 8) { clock_gettime(CLOCK_MONOTONIC, &_t0); run_gs_gf8(dsupp, drecv, n, k, tau, &codewords, &nc); clock_gettime(CLOCK_MONOTONIC, &_t1); }
+    else        { clock_gettime(CLOCK_MONOTONIC, &_t0); run_gs_gf16(dsupp, drecv, n, k, tau, &codewords, &nc); clock_gettime(CLOCK_MONOTONIC, &_t1); }
+    long long _dns = (long long)(_t1.tv_sec - _t0.tv_sec) * 1000000000LL + (long long)(_t1.tv_nsec - _t0.tv_nsec);
 
     printf("status=radius\n");
+    printf("decode-ns=%lld\n", _dns);
     for (j = 0; j < nc; j++) {
         unsigned cx[64], cv[64], f[8];
         for (i = 0; i < n; i++) {

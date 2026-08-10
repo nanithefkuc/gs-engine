@@ -27,6 +27,71 @@ pub fn decode(fixture: &Fixture) -> Result<Vec<Vec<Vec<u8>>>, String> {
     }
 }
 
+pub fn decode_warm(fixture: &Fixture, reps: usize) -> u128 {
+    match fixture.field {
+        FieldTag::Gf8 => decode_warm_impl_gf8(fixture, reps),
+        FieldTag::Gf16 => decode_warm_impl_gf16(fixture, reps),
+    }
+}
+
+macro_rules! warm_impl {
+    ($name:ident, $F:ty) => {
+        fn $name(fixture: &Fixture, reps: usize) -> u128 {
+            let max_degree = match fixture.k.checked_sub(1) {
+                Some(d) => d,
+                None => return 0,
+            };
+            let points: Vec<_> = fixture
+                .support
+                .iter()
+                .map(|bytes| <$F as Field>::read(bytes))
+                .collect();
+            let received: Vec<_> = fixture
+                .received
+                .iter()
+                .map(|bytes| <$F as Field>::read(bytes))
+                .collect();
+            let parameters = match GsParameters::new::<$F>(
+                fixture.n,
+                max_degree,
+                fixture.target_radius,
+                fixture.multiplicity,
+                fixture.y_degree,
+                fixture.weighted_degree,
+                PARAMETER_LIMITS,
+            ) {
+                Ok(p) => p,
+                Err(_) => return 0,
+            };
+            let domain = match EvaluationDomain::<$F>::arbitrary(points) {
+                Ok(d) => d,
+                Err(_) => return 0,
+            };
+            let plan = match GsPlan::new(parameters, domain, ROOT_LIMITS) {
+                Ok(p) => p,
+                Err(_) => return 0,
+            };
+            let mut scratch = DecodeScratch::new();
+            let mut candidates = Vec::new();
+            // Warm up.
+            let _ = plan.decode_into(&received, &mut scratch, &mut candidates);
+            candidates.clear();
+            let mut samples: Vec<u128> = Vec::with_capacity(reps);
+            for _ in 0..reps {
+                let start = std::time::Instant::now();
+                let _ = plan.decode_into(&received, &mut scratch, &mut candidates);
+                samples.push(start.elapsed().as_nanos());
+                candidates.clear();
+            }
+            samples.sort();
+            samples[samples.len() / 2]
+        }
+    };
+}
+
+warm_impl!(decode_warm_impl_gf8, Gf8);
+warm_impl!(decode_warm_impl_gf16, Gf16);
+
 macro_rules! decode_impl {
     ($name:ident, $F:ty) => {
         fn $name(fixture: &Fixture) -> Result<Vec<Vec<Vec<u8>>>, String> {
