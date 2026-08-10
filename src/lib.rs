@@ -11,6 +11,7 @@
 extern crate alloc;
 
 mod decoder;
+pub mod cost;
 pub mod domain;
 mod error;
 mod evaluate;
@@ -24,6 +25,11 @@ mod scratch;
 pub use decoder::{DecodeError, GsPlan};
 pub use domain::{DomainError, EvaluationBackend, EvaluationDomain};
 pub use error::ConfigError;
+pub use cost::{
+    BackendClass, DomainClass, InterpolationBackend, InterpolationCostKey, ProductBackend,
+    ProductCostKey, RootBackend, RootCostKey, ScoringBackend, ScoringCostKey, select_interpolation,
+    select_product, select_root, select_scoring,
+};
 pub use evaluate::{
     BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER, BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER,
     BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER, BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER,
