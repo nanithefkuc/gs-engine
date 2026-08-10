@@ -61,6 +61,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "butterfly-fft"
 version = "0.1.1"
+source = "git+https://github.com/nanithefkuc/butterfly-fft?rev=6b3f52485bfff2664d6b0c92452137e618a60932#6b3f52485bfff2664d6b0c92452137e618a60932"
 dependencies = [
  "fgf",
  "simdispatch",
@@ -202,6 +203,7 @@ checksum = "26b73573e6edcd2af0cdf47bd6cb58f0b3839491263c314eaad1ccf24430e1de"
 [[package]]
 name = "gfm"
 version = "0.0.0"
+source = "git+https://github.com/nanithefkuc/gfm?rev=184b264f0f433b7365a8180378b3f3e99c1417bf#184b264f0f433b7365a8180378b3f3e99c1417bf"
 dependencies = [
  "fgf",
 ]
