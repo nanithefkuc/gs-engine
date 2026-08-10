@@ -1,14 +1,14 @@
-use cafft::basis::{
+use butterfly_fft::basis::{
     conversion_scratch_elements, monomial_to_novel_bytes, monomial_to_novel_with_scratch,
     novel_to_monomial_bytes, novel_to_monomial_with_scratch,
 };
-use cafft::core::transform::TransformPlan;
-use fff::field::{Elem, Field};
-use fff::{Gf8, Gf16};
+use butterfly_fft::core::transform::TransformPlan;
+use fgf::field::{Elem, Field};
+use fgf::{Gf8, Gf16};
 use gs_engine::ConfigError;
 use gs_engine::geometry::{checked_product, checked_sum, try_zeroed};
 
-fn element_round_trip<F: cafft::core::kernel::ButterflyKernels>() {
+fn element_round_trip<F: butterfly_fft::core::kernel::ButterflyKernels>() {
     let plan = TransformPlan::<F>::new(8).expect("valid transform plan");
     let original: Vec<_> = (0..plan.size())
         .map(|index| F::GENERATOR.pow(index as u64))

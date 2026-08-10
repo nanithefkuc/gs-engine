@@ -1,11 +1,11 @@
 use alloc::vec::Vec;
 
-use fff::field::Elem;
-use fff::kernel::{FieldKernels, backend_for};
-use fff::ops;
+use fgf::field::Elem;
+use fgf::kernel::{FieldKernels, backend_for};
+use fgf::ops;
 
 use crate::ConfigError;
-use crate::geometry::try_zeroed;
+use crate::geometry::{checked_product, try_zeroed};
 
 use super::{Polynomial, PolynomialError};
 
@@ -131,7 +131,7 @@ impl<F: FieldKernels> Polynomial<F> {
                 continue;
             }
             let source_count = source.coefficient_count().min(output_count - shift);
-            result.add_scaled_packed_at(
+            result.add_scaled_packed_at_raw(
                 scale,
                 &source.as_packed()[..source_count * F::BYTES],
                 shift,
@@ -353,6 +353,18 @@ impl<F: FieldKernels> Polynomial<F> {
         source: &[u8],
         shift: usize,
     ) -> Result<(), ConfigError> {
+        self.add_scaled_packed_at_raw(scale, source, shift)?;
+        self.normalize();
+        Ok(())
+    }
+
+    #[inline]
+    fn add_scaled_packed_at_raw(
+        &mut self,
+        scale: F::Elem,
+        source: &[u8],
+        shift: usize,
+    ) -> Result<(), ConfigError> {
         if source.is_empty() || scale.is_zero() {
             return Ok(());
         }
@@ -380,6 +392,151 @@ impl<F: FieldKernels> Polynomial<F> {
                 F::write(output, F::read(output).add(scale.mul(F::read(input))));
             }
         }
+        Ok(())
+    }
+
+    /// Reuse this polynomial's buffer to hold a copy of `source`.
+    pub(crate) fn assign_from(&mut self, source: &Self) {
+        self.coefficients.clone_from(&source.coefficients);
+    }
+
+    /// Reset to the zero polynomial while retaining allocated capacity.
+    pub(crate) fn set_zero(&mut self) {
+        self.coefficients.clear();
+    }
+
+    /// Write the schoolbook product into reusable output storage.
+    pub(crate) fn multiply_into(&self, other: &Self, out: &mut Self) -> Result<(), ConfigError> {
+        let output_count = match (self.coefficient_count(), other.coefficient_count()) {
+            (0, _) | (_, 0) => {
+                out.set_zero();
+                return Ok(());
+            }
+            (left, right) => left
+                .checked_add(right)
+                .and_then(|sum| sum.checked_sub(1))
+                .ok_or(ConfigError::GeometryOverflow {
+                    context: "polynomial product coefficients",
+                })?,
+        };
+        self.multiply_truncated_into(other, output_count, out)
+    }
+
+    /// Write the truncated product into reusable output storage.
+    pub(crate) fn multiply_truncated_into(
+        &self,
+        other: &Self,
+        coefficient_count: usize,
+        out: &mut Self,
+    ) -> Result<(), ConfigError> {
+        out.set_zero();
+        if self.is_zero() || other.is_zero() || coefficient_count == 0 {
+            return Ok(());
+        }
+        let full_count = self
+            .coefficient_count()
+            .checked_add(other.coefficient_count())
+            .and_then(|sum| sum.checked_sub(1))
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "polynomial product coefficients",
+            })?;
+        let output_count = coefficient_count.min(full_count);
+        out.resize_coefficients(output_count)?;
+
+        let (source, factors) = if self.coefficient_count() >= other.coefficient_count() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        for (shift, scale) in factors.coefficients().enumerate() {
+            if shift >= output_count || scale.is_zero() {
+                continue;
+            }
+            let source_count = source.coefficient_count().min(output_count - shift);
+            out.add_scaled_packed_at_raw(
+                scale,
+                &source.as_packed()[..source_count * F::BYTES],
+                shift,
+            )?;
+        }
+        out.normalize();
+        Ok(())
+    }
+
+    /// Write quotient and remainder into reusable output storage.
+    pub(crate) fn div_rem_into(
+        &self,
+        divisor: &Self,
+        quotient: &mut Self,
+        remainder: &mut Self,
+    ) -> Result<(), PolynomialError> {
+        let Some(divisor_degree) = divisor.degree() else {
+            return Err(PolynomialError::DivisionByZero);
+        };
+        quotient.set_zero();
+        let Some(dividend_degree) = self.degree() else {
+            remainder.set_zero();
+            return Ok(());
+        };
+        remainder.assign_from(self);
+        if dividend_degree < divisor_degree {
+            return Ok(());
+        }
+        quotient.resize_coefficients(dividend_degree - divisor_degree + 1)?;
+        let divisor_leading_inverse = divisor
+            .leading_coefficient()
+            .expect("nonzero divisor has a leading coefficient")
+            .inv();
+        while let Some(remainder_degree) = remainder.degree() {
+            if remainder_degree < divisor_degree {
+                break;
+            }
+            let shift = remainder_degree - divisor_degree;
+            let scale = remainder
+                .leading_coefficient()
+                .expect("nonzero remainder has a leading coefficient")
+                .mul(divisor_leading_inverse);
+            let start = shift * F::BYTES;
+            let updated = F::read(&quotient.coefficients[start..start + F::BYTES]).add(scale);
+            F::write(&mut quotient.coefficients[start..start + F::BYTES], updated);
+            remainder.add_scaled_shifted_assign(scale, divisor, shift)?;
+        }
+        quotient.normalize();
+        Ok(())
+    }
+
+    /// Divide exactly by `X^power` into reusable output storage.
+    pub(crate) fn divide_by_x_power_into(
+        &self,
+        power: usize,
+        out: &mut Self,
+    ) -> Result<(), PolynomialError> {
+        if self.is_zero() || power == 0 {
+            out.assign_from(self);
+            return Ok(());
+        }
+        if self.x_valuation().is_none_or(|valuation| valuation < power) {
+            return Err(PolynomialError::NonExactDivision);
+        }
+        let byte_offset = power
+            .checked_mul(F::BYTES)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "polynomial X-power offset",
+            })?;
+        out.assign_packed(&self.coefficients[byte_offset..])?;
+        Ok(())
+    }
+
+    /// Overwrite with low-to-high coefficients, reusing existing capacity.
+    pub(crate) fn assign_coefficients(
+        &mut self,
+        coefficients: &[F::Elem],
+    ) -> Result<(), ConfigError> {
+        self.set_zero();
+        let byte_len =
+            checked_product("polynomial coefficient bytes", coefficients.len(), F::BYTES)?;
+        self.resize_coefficients(coefficients.len())?;
+        ops::pack::<F>(&mut self.coefficients[..byte_len], coefficients);
         self.normalize();
         Ok(())
     }

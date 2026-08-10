@@ -3,10 +3,10 @@
 use alloc::vec::Vec;
 use core::fmt;
 
-use cafft::core::kernel::ButterflyKernels;
-use cafft::core::transform::TransformPlan;
-use cafft::error::PlanError;
-use cafft::shifted::ShiftedPlan;
+use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::transform::TransformPlan;
+use butterfly_fft::error::PlanError;
+use butterfly_fft::shifted::ShiftedPlan;
 
 use crate::ConfigError;
 
@@ -15,10 +15,10 @@ use crate::ConfigError;
 pub enum EvaluationBackend {
     /// Scalar Horner evaluation at arbitrary points.
     Horner,
-    /// CAFFT evaluation over an additive subspace.
-    CafftAdditive,
-    /// CAFFT evaluation over an affine coset.
-    CafftAffineCoset,
+    /// butterfly-fft evaluation over an additive subspace.
+    ButterflyFftAdditive,
+    /// butterfly-fft evaluation over an affine coset.
+    ButterflyFftAffineCoset,
 }
 
 /// Failure while constructing or matching an evaluation domain.
@@ -33,7 +33,7 @@ pub enum DomainError {
         /// Index of the duplicate occurrence.
         second: usize,
     },
-    /// A CAFFT plan could not represent the requested domain.
+    /// A butterfly-fft plan could not represent the requested domain.
     TransformPlan(PlanError),
     /// The domain size does not match the decoder parameters.
     LengthMismatch {
@@ -76,7 +76,7 @@ impl fmt::Display for DomainError {
 #[cfg(feature = "std")]
 impl std::error::Error for DomainError {}
 
-/// Distinct evaluation points with an optional CAFFT execution plan.
+/// Distinct evaluation points with an optional butterfly-fft execution plan.
 #[derive(Clone, Debug)]
 pub struct EvaluationDomain<F: ButterflyKernels> {
     points: Vec<F::Elem>,
@@ -172,8 +172,8 @@ impl<F: ButterflyKernels> EvaluationDomain<F> {
     pub const fn backend(&self) -> EvaluationBackend {
         match self.kind {
             DomainKind::Arbitrary => EvaluationBackend::Horner,
-            DomainKind::Additive(_) => EvaluationBackend::CafftAdditive,
-            DomainKind::Affine(_) => EvaluationBackend::CafftAffineCoset,
+            DomainKind::Additive(_) => EvaluationBackend::ButterflyFftAdditive,
+            DomainKind::Affine(_) => EvaluationBackend::ButterflyFftAffineCoset,
         }
     }
 
@@ -189,7 +189,7 @@ impl<F: ButterflyKernels> EvaluationDomain<F> {
         &self,
         rows: &mut [u8],
         row_len: usize,
-    ) -> Result<(), cafft::error::TransformLengthError> {
+    ) -> Result<(), butterfly_fft::error::TransformLengthError> {
         match &self.kind {
             DomainKind::Arbitrary => Ok(()),
             DomainKind::Additive(plan) => plan.forward_bytes(rows, row_len),

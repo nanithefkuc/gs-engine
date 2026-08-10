@@ -1,0 +1,15 @@
+gs-engine-fixture-v1
+name=gf8-additive-4-1-radius-2
+field=gf8
+field-definition=gf2[x]/(x^8+x^4+x^3+x+1);le-polynomial-basis
+domain=additive
+n=4
+k=1
+target-radius=2
+multiplicity=1
+y-degree=2
+weighted-degree=1
+support=00,01,02,03
+received=07,07,09,09
+expected-candidate=07
+expected-candidate=09

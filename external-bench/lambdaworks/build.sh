@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+revision=3c8d8f65546cde6e847dd29b2ef6aefc38c0895a
+url=https://github.com/lambdaclass/lambdaworks.git
+root=${EXTERNAL_BENCH_ROOT:-"$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"}
+source_dir=$root/sources/lambdaworks
+
+if [ ! -d "$source_dir/.git" ]; then
+    mkdir -p "$root/sources"
+    git clone --filter=blob:none --no-checkout "$url" "$source_dir"
+fi
+git -C "$source_dir" fetch --depth 1 origin "$revision"
+git -C "$source_dir" checkout --detach "$revision"
+
+rustflags=${RUSTFLAGS:--C target-cpu=native}
+RUSTFLAGS=$rustflags cargo build \
+    --release \
+    --locked \
+    --manifest-path "$source_dir/examples/reed-solomon-codes/Cargo.toml"
+
+printf '%s\n' "lambdaworks_revision=$revision"
+printf '%s\n' "lambdaworks_rustflags=$rustflags"
+printf '%s\n' "lambdaworks_manifest=$source_dir/examples/reed-solomon-codes/Cargo.toml"

@@ -1,0 +1,20 @@
+# Immutable external decoder inputs. Adapters remain separate processes.
+
+[PERCYXX]
+url=https://github.com/gfanti/P2P-PIR-Cpp.git
+revision=b0cbb083b76ee9d55747954cbdb3b878e1dc24c7
+license=GPL-2.0-only
+build=percyxx/build.sh
+
+[DECODING]
+url=http://www.coincoin169.org/research/decoding/decoding-0.4.tar.bz2
+release=0.4
+sha256=0746943594f0a5b2c63d0ec20ad42ceb8b20df211a50c095e4bbf1ff365bea62
+license=GPL-2.0-or-later
+build=decoding/build.sh
+
+[LAMBDAWORKS]
+url=https://github.com/lambdaclass/lambdaworks.git
+revision=3c8d8f65546cde6e847dd29b2ef6aefc38c0895a
+license=Apache-2.0
+build=lambdaworks/build.sh

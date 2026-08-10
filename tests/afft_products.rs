@@ -1,6 +1,6 @@
-use fff::field::Field;
-use fff::kernel::FieldKernels;
-use fff::{Gf8, Gf16};
+use fgf::field::Field;
+use fgf::kernel::FieldKernels;
+use fgf::{Gf8, Gf16};
 use gs_engine::{Polynomial, PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
 fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {
@@ -16,7 +16,7 @@ fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {
     Polynomial::from_coefficients(&coefficients).unwrap()
 }
 
-fn compare_forced<F: cafft::core::kernel::ButterflyKernels>(
+fn compare_forced<F: butterfly_fft::core::kernel::ButterflyKernels>(
     left: &Polynomial<F>,
     right: &Polynomial<F>,
     coefficient_count: usize,
@@ -40,7 +40,10 @@ fn compare_forced<F: cafft::core::kernel::ButterflyKernels>(
         &mut afft,
     )
     .unwrap();
-    assert_eq!(afft, schoolbook);
+    assert_eq!(afft.len(), schoolbook.len());
+    for (afft, schoolbook) in afft.iter().zip(&schoolbook) {
+        assert_eq!(afft.as_packed(), schoolbook.as_packed());
+    }
 }
 
 #[test]
@@ -54,6 +57,24 @@ fn forced_afft_matches_schoolbook_over_gf8_and_gf16() {
     let right16 = generated::<Gf16>(270, 4);
     compare_forced(&left16, &right16, 570);
     compare_forced(&left16, &right16, 333);
+}
+
+#[test]
+fn forced_products_cover_zero_unbalanced_truncation_and_cancellation() {
+    let zero = Polynomial::<Gf8>::zero();
+    let one = Polynomial::<Gf8>::one().unwrap();
+    compare_forced(&zero, &one, 1);
+
+    let unbalanced_left = generated::<Gf16>(127, 11);
+    let unbalanced_right = generated::<Gf16>(3, 12);
+    compare_forced(&unbalanced_left, &unbalanced_right, 129);
+    compare_forced(&unbalanced_left, &unbalanced_right, 1);
+
+    let one16 = <Gf16 as Field>::Elem::ONE;
+    let cancelling = Polynomial::<Gf16>::from_coefficients(&[one16, one16]).unwrap();
+    let truncated = cancelling.multiply_truncated(&cancelling, 2).unwrap();
+    assert_eq!(truncated, Polynomial::one().unwrap());
+    compare_forced(&cancelling, &cancelling, 2);
 }
 
 #[test]

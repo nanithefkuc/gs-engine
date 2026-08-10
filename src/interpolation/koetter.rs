@@ -15,9 +15,9 @@
 
 use alloc::vec::Vec;
 
-use fff::field::Elem;
-use fff::kernel::{FieldKernels, backend_for};
-use fff::ops::{self, Coeff};
+use fgf::field::Elem;
+use fgf::kernel::{FieldKernels, backend_for};
+use fgf::ops::{self, Coeff};
 
 use crate::{BivariatePolynomial, ConfigError, GsParameters};
 

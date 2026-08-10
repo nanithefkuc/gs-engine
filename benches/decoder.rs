@@ -1,139 +1,104 @@
+mod common;
+
 use std::hint::black_box;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use cafft::core::kernel::ButterflyKernels;
-use fff::field::{Elem, Field};
-use fff::kernel::{FieldKernels, backend_for};
-use fff::{Gf8, Gf16};
-use gs_engine::{
-    AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, DecodeScratch, EvaluationDomain,
-    GsParameters, GsPlan, KoetterScratch, ParameterLimits, Polynomial, alekhnovich_roots,
-    interpolate_koetter, interpolate_koetter_into, interpolate_module,
-};
+use butterfly_fft::core::kernel::ButterflyKernels;
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use fgf::{Gf8, Gf16};
+use gs_engine::DecodeScratch;
 
-const ROOT_LIMITS: AlekhnovichLimits =
-    AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);
+use common::{DECODE_SPECS, DecodeCase};
 
-fn element<F: Field>(value: u64) -> F::Elem {
-    let bytes = value.to_le_bytes();
-    F::read(&bytes[..F::BYTES])
-}
+fn run_field<F: ButterflyKernels>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    field: &str,
+) {
+    for &spec in DECODE_SPECS {
+        let case = DecodeCase::<F>::new(spec);
+        case.report_allocation_records(field);
+        group.throughput(Throughput::Elements(spec.n as u64));
 
-fn polynomial<F: FieldKernels>(coefficients: &[F::Elem]) -> Polynomial<F> {
-    Polynomial::from_coefficients(coefficients).unwrap()
-}
+        let construction_id = spec.id::<F>("construction", field);
+        group.bench_function(BenchmarkId::from_parameter(construction_id), |bencher| {
+            bencher.iter(|| black_box(case.build_plan()));
+        });
 
-fn elapsed(mut operation: impl FnMut(), iterations: usize) -> Duration {
-    let start = Instant::now();
-    for _ in 0..iterations {
-        operation();
-    }
-    start.elapsed()
-}
+        let cold_id = spec.id::<F>("cold-decode", field);
+        let cold_plan = case.build_plan();
+        group.bench_function(BenchmarkId::from_parameter(cold_id), |bencher| {
+            bencher.iter_batched(
+                || (DecodeScratch::new(), Vec::new()),
+                |(mut scratch, mut output)| {
+                    black_box(
+                        cold_plan
+                            .decode_into(black_box(&case.received), &mut scratch, &mut output)
+                            .expect("cold benchmark decode"),
+                    );
+                    black_box(output);
+                },
+                BatchSize::SmallInput,
+            );
+        });
 
-fn run<F: ButterflyKernels>(field: &str) {
-    let backend = backend_for::<F>().name();
-    let limits = ParameterLimits::new(8, 16, usize::MAX, usize::MAX);
-    let parameters = GsParameters::new::<F>(15, 4, 6, 2, 4, 17, limits).unwrap();
-    let points: Vec<_> = (0..15).map(|value| element::<F>(value)).collect();
-    let message = polynomial::<F>(&[
-        element::<F>(0x1234),
-        element::<F>(0xabcd),
-        element::<F>(0x0108),
-        element::<F>(0xbeef),
-        element::<F>(0x2222),
-    ]);
-    let mut received = message.evaluate_many(&points).unwrap();
-    for (offset, value) in received[9..].iter_mut().enumerate() {
-        *value = value.add(element::<F>((offset + 1) as u64));
-    }
-    let alternate_message = polynomial::<F>(&[
-        element::<F>(0x4321),
-        element::<F>(0xdcba),
-        element::<F>(0x0801),
-        element::<F>(0xfeeb),
-        element::<F>(0x1111),
-    ]);
-    let mut alternate_received = alternate_message.evaluate_many(&points).unwrap();
-    for (offset, value) in alternate_received[9..].iter_mut().enumerate() {
-        *value = value.add(element::<F>((offset + 17) as u64));
-    }
-    let interpolation = interpolate_koetter::<F>(parameters, &points, &received).unwrap();
-    let mut interpolation_scratch = KoetterScratch::new();
-    let mut interpolation_output = BivariatePolynomial::zero();
+        let changed_id = spec.id::<F>("warmed-changed-word", field);
+        let (changed_plan, mut changed_scratch, mut changed_output) = case.prepared_state();
+        changed_plan
+            .decode_into(&case.received, &mut changed_scratch, &mut changed_output)
+            .expect("warm changed-word benchmark");
+        let mut iteration = 0_usize;
+        group.bench_function(BenchmarkId::from_parameter(changed_id), |bencher| {
+            bencher.iter(|| {
+                let received = if iteration.is_multiple_of(2) {
+                    &case.alternate_received
+                } else {
+                    &case.received
+                };
+                iteration += 1;
+                black_box(
+                    changed_plan
+                        .decode_into(
+                            black_box(received),
+                            &mut changed_scratch,
+                            &mut changed_output,
+                        )
+                        .expect("changed-word benchmark decode"),
+                );
+                black_box(&changed_output);
+            });
+        });
 
-    let interpolation_time = elapsed(
-        || {
-            black_box(interpolate_koetter_into::<F>(
-                parameters,
-                black_box(&points),
-                black_box(&received),
-                &mut interpolation_scratch,
-                &mut interpolation_output,
-            ))
-            .unwrap();
-        },
-        200,
-    );
-    let module_time = elapsed(
-        || {
-            black_box(interpolate_module::<F>(
-                parameters,
-                black_box(&points),
-                black_box(&received),
-            ))
-            .unwrap();
-        },
-        200,
-    );
-    let mut root_scratch = AlekhnovichScratch::new();
-    let roots_time = elapsed(
-        || {
-            black_box(alekhnovich_roots(
-                black_box(&interpolation),
-                parameters.max_degree(),
-                ROOT_LIMITS,
-                &mut root_scratch,
-            ))
-            .unwrap();
-        },
-        200,
-    );
-
-    let domain = EvaluationDomain::<F>::arbitrary(points).unwrap();
-    let plan = GsPlan::new(parameters, domain, ROOT_LIMITS).unwrap();
-    let mut decode_scratch = DecodeScratch::new();
-    let mut output = Vec::new();
-    let mut decode_iteration = 0_usize;
-    let decode_time = elapsed(
-        || {
-            let word = if decode_iteration.is_multiple_of(2) {
-                &received
-            } else {
-                &alternate_received
-            };
-            decode_iteration += 1;
-            black_box(plan.decode_into(black_box(word), &mut decode_scratch, &mut output)).unwrap();
-        },
-        200,
-    );
-
-    for (name, duration) in [
-        ("koetter", interpolation_time),
-        ("module", module_time),
-        ("roots", roots_time),
-        ("decode", decode_time),
-    ] {
-        println!(
-            "{field},{backend},{name},200,{},{}",
-            duration.as_nanos(),
-            duration.as_nanos() / 200
-        );
+        let repeat_id = spec.id::<F>("exact-repeat", field);
+        let (repeat_plan, mut repeat_scratch, mut repeat_output) = case.prepared_state();
+        repeat_plan
+            .decode_into(&case.received, &mut repeat_scratch, &mut repeat_output)
+            .expect("warm exact-repeat benchmark");
+        group.bench_function(BenchmarkId::from_parameter(repeat_id), |bencher| {
+            bencher.iter(|| {
+                black_box(
+                    repeat_plan
+                        .decode_into(
+                            black_box(&case.received),
+                            &mut repeat_scratch,
+                            &mut repeat_output,
+                        )
+                        .expect("exact-repeat benchmark decode"),
+                );
+                black_box(&repeat_output);
+            });
+        });
     }
 }
 
-fn main() {
-    println!("field,backend,stage,iterations,nanoseconds,ns_per_iteration");
-    run::<Gf8>("gf8");
-    run::<Gf16>("gf16");
+fn decoder_matrix(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("end-to-end");
+    group.warm_up_time(Duration::from_secs(1));
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
+    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf16>(&mut group, "gf16");
+    group.finish();
 }
+
+criterion_group!(benches, decoder_matrix);
+criterion_main!(benches);

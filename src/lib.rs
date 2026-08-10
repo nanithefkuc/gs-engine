@@ -1,7 +1,7 @@
 //! Reusable Guruswami–Sudan list-decoding engine.
 //!
-//! `gs-engine` uses [`fff`] for finite-field arithmetic and [`cafft`] for
-//! additive transforms. Checked geometry helpers reject unrepresentable or
+//! `gs-engine` uses [`fgf`] for finite-field arithmetic and [`butterfly_fft`]
+//! for additive transforms. Checked geometry helpers reject unrepresentable or
 //! unallocatable decoder layouts before arithmetic begins.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -25,17 +25,21 @@ pub use decoder::{DecodeError, GsPlan};
 pub use domain::{DomainError, EvaluationBackend, EvaluationDomain};
 pub use error::ConfigError;
 pub use evaluate::{
-    CAFFT_BATCH2_SCORING_CROSSOVER, CAFFT_BATCH4_SCORING_CROSSOVER, CAFFT_BATCH8_SCORING_CROSSOVER,
-    CAFFT_BATCH16_SCORING_CROSSOVER, CAFFT_SINGLE_SCORING_CROSSOVER,
+    BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER, BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER,
+    BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER, BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER,
+    BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER,
 };
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
+pub use evaluate::{ScoringStrategy, score_candidates_with_strategy};
+#[cfg(feature = "internals")]
 pub use interpolation::{
     InterpolationConstraint, InterpolationMonomial, ReferenceInterpolationLimits,
     interpolate_reference, reference_constraints, reference_monomials,
 };
 pub use interpolation::{
-    InterpolationError, KoetterScratch, MODULE_INTERPOLATION_CROSSOVER, interpolate_koetter,
-    interpolate_koetter_into, interpolate_koetter_with_scratch, interpolate_module,
+    InterpolationError, InterpolationPlan, KoetterScratch, MODULE_INTERPOLATION_CROSSOVER,
+    ModuleScratch, interpolate_koetter, interpolate_koetter_into, interpolate_koetter_with_scratch,
+    interpolate_module, interpolate_module_into,
 };
 pub use params::{GsParameters, ParameterLimits, ResourceEstimate};
 pub use poly::{

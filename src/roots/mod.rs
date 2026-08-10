@@ -9,6 +9,7 @@ use core::fmt;
 
 use crate::PolynomialError;
 
+pub(crate) use alekhnovich::alekhnovich_roots_into;
 pub use alekhnovich::{
     AffineRootFamily, AlekhnovichLimits, AlekhnovichScratch, DEFAULT_ROTH_RUCKENSTEIN_CROSSOVER,
     alekhnovich_roots,

@@ -1,14 +1,15 @@
 use alloc::vec::Vec;
 use core::fmt;
 
-use cafft::core::kernel::ButterflyKernels;
-use cafft::error::TransformLengthError;
+use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::error::TransformLengthError;
 
 use crate::evaluate::score_candidates;
+use crate::roots::alekhnovich_roots_into;
 use crate::{
     AlekhnovichLimits, ConfigError, DecodeScratch, DomainError, EvaluationDomain, GsParameters,
-    InterpolationError, MODULE_INTERPOLATION_CROSSOVER, Polynomial, RootError, alekhnovich_roots,
-    interpolate_koetter_with_scratch, interpolate_module,
+    InterpolationError, InterpolationPlan, MODULE_INTERPOLATION_CROSSOVER, Polynomial, RootError,
+    interpolate_koetter_into, interpolate_module_into,
 };
 
 /// Failure while constructing or executing an end-to-end GS decoder.
@@ -29,7 +30,7 @@ pub enum DecodeError {
     Interpolation(InterpolationError),
     /// Polynomial root extraction failed.
     Roots(RootError),
-    /// A CAFFT execution buffer had inconsistent geometry.
+    /// A butterfly-fft execution buffer had inconsistent geometry.
     Transform(TransformLengthError),
     /// A decoder-internal postcondition was violated.
     InternalInvariant {
@@ -96,6 +97,7 @@ pub struct GsPlan<F: ButterflyKernels> {
     parameters: GsParameters,
     domain: EvaluationDomain<F>,
     root_limits: AlekhnovichLimits,
+    interpolation: InterpolationPlan<F>,
 }
 
 impl<F: ButterflyKernels> GsPlan<F> {
@@ -112,10 +114,12 @@ impl<F: ButterflyKernels> GsPlan<F> {
             }
             .into());
         }
+        let interpolation = InterpolationPlan::new_with_domain(parameters, &domain)?;
         Ok(Self {
             parameters,
             domain,
             root_limits,
+            interpolation,
         })
     }
 
@@ -137,6 +141,13 @@ impl<F: ButterflyKernels> GsPlan<F> {
         self.root_limits
     }
 
+    /// Total heap bytes retained by the prepared, received-word-independent
+    /// interpolation data. Report this to bound plan memory before decoding.
+    #[must_use]
+    pub fn prepared_bytes(&self) -> usize {
+        self.interpolation.prepared_bytes()
+    }
+
     /// Reserve the geometry-dependent decoder workspace and output capacity.
     ///
     /// Call this once when construction-time allocation is preferable to
@@ -149,6 +160,21 @@ impl<F: ButterflyKernels> GsPlan<F> {
     ) -> Result<(), DecodeError> {
         if self.domain.transform_plan().is_some() {
             scratch.reserve_evaluation(self.domain.len(), self.parameters.y_degree())?;
+            scratch.module.reserve_transform(self.domain.len())?;
+        }
+        let root_capacity = self
+            .parameters
+            .y_degree()
+            .min(self.root_limits.max_output_roots());
+        if scratch.root_candidates.capacity() < root_capacity {
+            scratch
+                .root_candidates
+                .try_reserve(root_capacity - scratch.root_candidates.capacity())
+                .map_err(|_| ConfigError::AllocationFailed {
+                    context: "planned root candidates",
+                    elements: root_capacity,
+                    element_size: core::mem::size_of::<Polynomial<F>>(),
+                })?;
         }
         if output.capacity() < self.parameters.y_degree() {
             output
@@ -182,64 +208,40 @@ impl<F: ButterflyKernels> GsPlan<F> {
             });
         }
 
-        let interpolation_is_cached = scratch.cached_interpolation_parameters
-            == Some(self.parameters)
-            && scratch.cached_received == received;
-        if !interpolation_is_cached {
-            scratch.cached_interpolation_parameters = None;
-            let interpolation =
-                match if self.parameters.code_length() >= MODULE_INTERPOLATION_CROSSOVER {
-                    interpolate_module::<F>(self.parameters, self.domain.points(), received)
-                } else {
-                    interpolate_koetter_with_scratch::<F>(
-                        self.parameters,
-                        self.domain.points(),
-                        received,
-                        &mut scratch.interpolation,
-                    )
-                } {
-                    Ok(interpolation) => interpolation,
-                    Err(error) => {
-                        output.clear();
-                        return Err(error.into());
-                    }
-                };
-            scratch.cached_received.clear();
-            if scratch.cached_received.capacity() < received.len()
-                && scratch.cached_received.try_reserve(received.len()).is_err()
-            {
-                output.clear();
-                return Err(ConfigError::AllocationFailed {
-                    context: "cached received word",
-                    elements: received.len(),
-                    element_size: core::mem::size_of::<F::Elem>(),
-                }
-                .into());
-            }
-            scratch.cached_received.extend_from_slice(received);
-            scratch.interpolation_output = interpolation;
-            scratch.cached_interpolation_parameters = Some(self.parameters);
+        let interpolation = if self.parameters.code_length() >= MODULE_INTERPOLATION_CROSSOVER {
+            interpolate_module_into::<F>(
+                self.parameters,
+                self.domain.points(),
+                received,
+                &self.interpolation,
+                Some(&self.domain),
+                &mut scratch.module,
+                &mut scratch.interpolation_output,
+            )
+            .map_err(DecodeError::from)
+        } else {
+            interpolate_koetter_into::<F>(
+                self.parameters,
+                self.domain.points(),
+                received,
+                &mut scratch.interpolation,
+                &mut scratch.interpolation_output,
+            )
+            .map_err(DecodeError::from)
+        };
+        if let Err(error) = interpolation {
+            output.clear();
+            return Err(error);
         }
-        let root_geometry = (self.parameters.max_degree(), self.root_limits);
-        let roots_are_cached = scratch.cached_root_geometry == Some(root_geometry)
-            && scratch.cached_root_input.as_ref() == Some(&scratch.interpolation_output);
-        if !roots_are_cached {
-            match alekhnovich_roots(
-                &scratch.interpolation_output,
-                self.parameters.max_degree(),
-                self.root_limits,
-                &mut scratch.roots,
-            ) {
-                Ok(candidates) => {
-                    scratch.root_candidates = candidates;
-                    scratch.cached_root_input = Some(scratch.interpolation_output.clone());
-                    scratch.cached_root_geometry = Some(root_geometry);
-                }
-                Err(error) => {
-                    output.clear();
-                    return Err(error.into());
-                }
-            }
+        if let Err(error) = alekhnovich_roots_into(
+            &scratch.interpolation_output,
+            self.parameters.max_degree(),
+            self.root_limits,
+            &mut scratch.roots,
+            &mut scratch.root_candidates,
+        ) {
+            output.clear();
+            return Err(error.into());
         }
         let candidates = core::mem::take(&mut scratch.root_candidates);
         let scoring = score_candidates(

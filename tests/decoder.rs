@@ -1,5 +1,5 @@
-use fff::field::Field;
-use fff::{Gf8, Gf16};
+use fgf::field::Field;
+use fgf::{Gf8, Gf16};
 use gs_engine::{
     AlekhnovichLimits, DecodeError, DecodeScratch, DomainError, EvaluationBackend,
     EvaluationDomain, GsParameters, GsPlan, ParameterLimits, Polynomial,
@@ -16,11 +16,11 @@ fn gf16(value: u16) -> <Gf16 as Field>::Elem {
     Gf16::read(&value.to_le_bytes())
 }
 
-fn polynomial<F: fff::kernel::FieldKernels>(coefficients: &[F::Elem]) -> Polynomial<F> {
+fn polynomial<F: fgf::kernel::FieldKernels>(coefficients: &[F::Elem]) -> Polynomial<F> {
     Polynomial::from_coefficients(coefficients).unwrap()
 }
 
-fn distance<F: fff::kernel::FieldKernels>(
+fn distance<F: fgf::kernel::FieldKernels>(
     candidate: &Polynomial<F>,
     points: &[F::Elem],
     received: &[F::Elem],
@@ -86,11 +86,11 @@ fn decodes_six_errors_beyond_unique_radius_for_15_5_rs() {
 }
 
 #[test]
-fn small_gf8_decode_matches_every_bounded_polynomial_and_cafft() {
+fn small_gf8_decode_matches_every_bounded_polynomial_and_butterfly_fft() {
     let parameter_limits = ParameterLimits::new(4, 8, usize::MAX, usize::MAX);
     let parameters = GsParameters::new::<Gf8>(4, 0, 2, 1, 2, 1, parameter_limits).unwrap();
-    let cafft_domain = EvaluationDomain::<Gf8>::additive_subspace(4).unwrap();
-    let points = cafft_domain.points().to_vec();
+    let butterfly_fft_domain = EvaluationDomain::<Gf8>::additive_subspace(4).unwrap();
+    let points = butterfly_fft_domain.points().to_vec();
     let received = [gf8(7), gf8(7), gf8(9), gf8(9)];
 
     let arbitrary_plan = GsPlan::new(
@@ -99,11 +99,11 @@ fn small_gf8_decode_matches_every_bounded_polynomial_and_cafft() {
         ROOT_LIMITS,
     )
     .unwrap();
-    let cafft_plan = GsPlan::new(parameters, cafft_domain, ROOT_LIMITS).unwrap();
+    let butterfly_fft_plan = GsPlan::new(parameters, butterfly_fft_domain, ROOT_LIMITS).unwrap();
     assert_eq!(arbitrary_plan.domain().backend(), EvaluationBackend::Horner);
     assert_eq!(
-        cafft_plan.domain().backend(),
-        EvaluationBackend::CafftAdditive
+        butterfly_fft_plan.domain().backend(),
+        EvaluationBackend::ButterflyFftAdditive
     );
 
     let mut exhaustive = Vec::new();
@@ -120,7 +120,7 @@ fn small_gf8_decode_matches_every_bounded_polynomial_and_cafft() {
     arbitrary_plan
         .decode_into(&received, &mut arbitrary_scratch, &mut arbitrary)
         .unwrap();
-    cafft_plan
+    butterfly_fft_plan
         .decode_into(&received, &mut accelerated_scratch, &mut accelerated)
         .unwrap();
 
@@ -150,7 +150,7 @@ fn affine_coset_scoring_matches_horner() {
     let accelerated = GsPlan::new(parameters, coset, ROOT_LIMITS).unwrap();
     assert_eq!(
         accelerated.domain().backend(),
-        EvaluationBackend::CafftAffineCoset
+        EvaluationBackend::ButterflyFftAffineCoset
     );
     let mut arbitrary_roots = Vec::new();
     let mut accelerated_roots = Vec::new();

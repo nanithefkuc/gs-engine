@@ -1,0 +1,14 @@
+gs-engine-fixture-v1
+name=gf16-arbitrary-15-5-radius-6
+field=gf16
+field-definition=gf8[u]/(u^2+u+0x20);gf8=aes-0x11b;le-components
+domain=arbitrary
+n=15
+k=5
+target-radius=6
+multiplicity=2
+y-degree=4
+weighted-degree=17
+support=0000,0100,0200,0300,0400,0500,0600,0700,0800,0900,0a00,0b00,0c00,0d00,0e00
+received=3412,3c24,baca,e655,05b7,ee5a,1d50,a214,031a,e0ff,d640,610c,ea5c,ea62,a939
+expected-candidate=3412,cdab,0801,efbe,2222

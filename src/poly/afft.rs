@@ -1,12 +1,14 @@
 use alloc::vec::Vec;
 use core::fmt;
 
-use cafft::basis::{conversion_scratch_elements, monomial_to_novel_bytes, novel_to_monomial_bytes};
-use cafft::core::kernel::ButterflyKernels;
-use cafft::core::transform::TransformPlan;
-use cafft::error::{PlanError, TransformLengthError};
-use fff::kernel::{Backend, backend_for};
-use fff::ops;
+use butterfly_fft::basis::{
+    conversion_scratch_elements, monomial_to_novel_bytes, novel_to_monomial_bytes,
+};
+use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::transform::TransformPlan;
+use butterfly_fft::error::{PlanError, TransformLengthError};
+use fgf::kernel::{Backend, backend_for};
+use fgf::ops;
 
 use crate::ConfigError;
 
@@ -115,6 +117,9 @@ pub struct PolynomialProductScratch<F: ButterflyKernels> {
     operands: Vec<u8>,
     products: Vec<u8>,
     conversion: Vec<u8>,
+    pub(crate) affine_powers: Vec<Polynomial<F>>,
+    pub(crate) affine_products: Vec<Polynomial<F>>,
+    pub(crate) affine_pairs: Vec<(usize, usize)>,
 }
 
 impl<F: ButterflyKernels> PolynomialProductScratch<F> {
@@ -126,6 +131,9 @@ impl<F: ButterflyKernels> PolynomialProductScratch<F> {
             operands: Vec::new(),
             products: Vec::new(),
             conversion: Vec::new(),
+            affine_powers: Vec::new(),
+            affine_products: Vec::new(),
+            affine_pairs: Vec::new(),
         }
     }
 
@@ -152,7 +160,7 @@ impl<F: ButterflyKernels> Default for PolynomialProductScratch<F> {
 /// and write them to caller-owned output storage.
 ///
 /// AFFT packs every left/right operand across byte-row columns, performs one
-/// pair of forward transforms, uses FFF elementwise multiplication per point,
+/// pair of forward transforms, uses FGF elementwise multiplication per point,
 /// and inverse-transforms all products as a second packed batch.
 pub fn multiply_batch_truncated<F: ButterflyKernels>(
     pairs: &[(&Polynomial<F>, &Polynomial<F>)],
@@ -161,25 +169,43 @@ pub fn multiply_batch_truncated<F: ButterflyKernels>(
     scratch: &mut PolynomialProductScratch<F>,
     output: &mut Vec<Polynomial<F>>,
 ) -> Result<(), ProductError> {
-    output.clear();
-    output
-        .try_reserve(pairs.len())
-        .map_err(|_| ConfigError::AllocationFailed {
-            context: "polynomial product outputs",
-            elements: pairs.len(),
-            element_size: core::mem::size_of::<Polynomial<F>>(),
-        })?;
-    if pairs.is_empty() {
+    multiply_batch_truncated_with(
+        pairs.len(),
+        |index| pairs[index],
+        coefficient_count,
+        strategy,
+        scratch,
+        output,
+    )
+}
+
+pub(crate) fn multiply_batch_truncated_with<'a, F, P>(
+    pair_count: usize,
+    pair: P,
+    coefficient_count: usize,
+    strategy: ProductStrategy,
+    scratch: &mut PolynomialProductScratch<F>,
+    output: &mut Vec<Polynomial<F>>,
+) -> Result<(), ProductError>
+where
+    F: ButterflyKernels,
+    P: Copy + Fn(usize) -> (&'a Polynomial<F>, &'a Polynomial<F>),
+{
+    prepare_output(output, pair_count)?;
+    if pair_count == 0 {
         return Ok(());
     }
 
     let mut max_full_count = 0_usize;
-    for &(left, right) in pairs {
+    for index in 0..pair_count {
+        let (left, right) = pair(index);
         let full_count = full_product_count(left, right)?;
         max_full_count = max_full_count.max(full_count);
     }
     if max_full_count == 0 || coefficient_count == 0 {
-        output.resize_with(pairs.len(), Polynomial::zero);
+        for polynomial in output {
+            polynomial.set_zero();
+        }
         return Ok(());
     }
 
@@ -187,7 +213,7 @@ pub fn multiply_batch_truncated<F: ButterflyKernels>(
         ProductStrategy::Schoolbook => false,
         ProductStrategy::Afft => true,
         ProductStrategy::Auto => {
-            let crossover = auto_crossover::<F>(pairs.len());
+            let crossover = auto_crossover::<F>(pair_count);
             max_full_count >= crossover
         }
     };
@@ -198,25 +224,24 @@ pub fn multiply_batch_truncated<F: ButterflyKernels>(
             }
             .into());
         }
-        return schoolbook_batch(pairs, coefficient_count, output);
+        return schoolbook_batch_with(pair_count, pair, coefficient_count, output);
     };
 
     if !use_afft {
-        return schoolbook_batch(pairs, coefficient_count, output);
+        return schoolbook_batch_with(pair_count, pair, coefficient_count, output);
     }
     if scratch.plan.as_ref().map(TransformPlan::size) != Some(transform_size) {
         match TransformPlan::<F>::new(transform_size) {
             Ok(plan) => scratch.plan = Some(plan),
             Err(error) if strategy == ProductStrategy::Auto => {
                 let _ = error;
-                return schoolbook_batch(pairs, coefficient_count, output);
+                return schoolbook_batch_with(pair_count, pair, coefficient_count, output);
             }
             Err(error) => return Err(error.into()),
         }
     }
 
-    let pair_bytes = pairs
-        .len()
+    let pair_bytes = pair_count
         .checked_mul(F::BYTES)
         .ok_or(ConfigError::GeometryOverflow {
             context: "AFFT product row bytes",
@@ -252,7 +277,8 @@ pub fn multiply_batch_truncated<F: ButterflyKernels>(
     )?;
     scratch.operands[..operand_bytes].fill(0);
 
-    for (lane, &(left, right)) in pairs.iter().enumerate() {
+    for lane in 0..pair_count {
+        let (left, right) = pair(lane);
         write_lane::<F>(
             &mut scratch.operands[..operand_bytes],
             operand_row_bytes,
@@ -297,7 +323,8 @@ pub fn multiply_batch_truncated<F: ButterflyKernels>(
         &mut scratch.conversion[..conversion_scratch_elements(transform_size) * pair_bytes],
     )?;
 
-    for (lane, &(left, right)) in pairs.iter().enumerate() {
+    for (lane, polynomial) in output.iter_mut().enumerate().take(pair_count) {
+        let (left, right) = pair(lane);
         let full_count = full_product_count(left, right)?;
         let result_count = full_count.min(coefficient_count);
         let byte_len = result_count
@@ -305,34 +332,54 @@ pub fn multiply_batch_truncated<F: ButterflyKernels>(
             .ok_or(ConfigError::GeometryOverflow {
                 context: "AFFT result bytes",
             })?;
-        let mut packed = Vec::new();
-        packed
-            .try_reserve_exact(byte_len)
-            .map_err(|_| ConfigError::AllocationFailed {
-                context: "AFFT result coefficients",
-                elements: byte_len,
-                element_size: 1,
-            })?;
-        packed.resize(byte_len, 0);
+        polynomial.set_zero();
+        polynomial.resize_coefficients(result_count)?;
         for degree in 0..result_count {
             let source = degree * pair_bytes + lane * F::BYTES;
             let destination = degree * F::BYTES;
-            packed[destination..destination + F::BYTES]
+            polynomial.coefficients[destination..destination + F::BYTES]
                 .copy_from_slice(&scratch.products[source..source + F::BYTES]);
         }
-        output.push(Polynomial::from_packed(packed).expect("complete packed field elements"));
+        debug_assert_eq!(polynomial.as_packed().len(), byte_len);
+        polynomial.normalize();
     }
     Ok(())
 }
 
-fn schoolbook_batch<F: ButterflyKernels>(
-    pairs: &[(&Polynomial<F>, &Polynomial<F>)],
+fn schoolbook_batch_with<'a, F, P>(
+    pair_count: usize,
+    pair: P,
     coefficient_count: usize,
-    output: &mut Vec<Polynomial<F>>,
-) -> Result<(), ProductError> {
-    for &(left, right) in pairs {
-        output.push(left.multiply_truncated(right, coefficient_count)?);
+    output: &mut [Polynomial<F>],
+) -> Result<(), ProductError>
+where
+    F: ButterflyKernels,
+    P: Fn(usize) -> (&'a Polynomial<F>, &'a Polynomial<F>),
+{
+    for (index, polynomial) in output.iter_mut().enumerate().take(pair_count) {
+        let (left, right) = pair(index);
+        left.multiply_truncated_into(right, coefficient_count, polynomial)?;
     }
+    Ok(())
+}
+
+fn prepare_output<F: ButterflyKernels>(
+    output: &mut Vec<Polynomial<F>>,
+    count: usize,
+) -> Result<(), ConfigError> {
+    if output.capacity() < count {
+        output
+            .try_reserve(count - output.len())
+            .map_err(|_| ConfigError::AllocationFailed {
+                context: "polynomial product outputs",
+                elements: count,
+                element_size: core::mem::size_of::<Polynomial<F>>(),
+            })?;
+    }
+    while output.len() < count {
+        output.push(Polynomial::zero());
+    }
+    output.truncate(count);
     Ok(())
 }
 

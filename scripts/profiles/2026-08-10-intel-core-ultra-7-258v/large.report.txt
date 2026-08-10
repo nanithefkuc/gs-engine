@@ -1,0 +1,84 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 5K of event 'cpu_atom/cycles/Pu'
+# Event count (approx.): 18182187281
+#
+# Children      Self  Command          Shared Object             Symbol
+# ........  ........  ...............  ........................  ..........................................................................................................................................................................................................................................................................................................................
+#
+    45.88%    45.88%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
+    26.46%    26.46%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
+     5.30%     5.30%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at_raw
+     2.05%     2.05%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::module::interpolate_module_into
+     2.03%     2.03%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gfm::poly::weak_popov_basis_with_scratch
+     1.92%     1.92%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] fgf::kernel::x86::gf16::mul_add_gfni_impl
+     1.91%     1.91%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated_into
+     1.67%     1.67%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem_into
+     1.65%     1.65%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::validate_result
+     1.29%     1.29%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] fgf::kernel::gf16::mul_add_scalar
+     1.28%     1.26%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::base_field_roots_into
+     1.26%     1.26%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] <gs_engine::interpolation::module::ModuleSlab<F> as gfm::poly::WeakPopovBasis<F>>::add_scaled_shifted_assign
+
+
+# Samples: 1  of event 'cpu_core/cycles/Pu'
+# Event count (approx.): 500500
+#
+# Children      Self  Command          Shared Object         Symbol
+# ........  ........  ...............  ....................  ......................
+#
+   100.00%   100.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00000000000105b0
+            |
+            ---0x7effe7994967
+               0x7effe7995be0
+               0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe7994967
+            |
+            ---0x7effe7994967
+               0x7effe7995be0
+               0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe7995be0
+            |
+            ---0x7effe7995be0
+               0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe79943df
+            |
+            ---0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe7997b90
+            |
+            ---0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe79864f0
+            |
+            ---0x7effe79864f0
+               0x7effe79835b0
+
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe79835b0
+            |
+            ---0x7effe79835b0
+
+
+
+#
+# (Tip: To add Node.js USDT(User-Level Statically Defined Tracing): perf buildid-cache --add `which node`)
+#

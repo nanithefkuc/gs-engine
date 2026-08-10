@@ -1,14 +1,15 @@
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use cafft::core::kernel::ButterflyKernels;
-use fff::field::Field;
-use fff::kernel::{Backend, backend_for};
+use butterfly_fft::core::kernel::ButterflyKernels;
+use fgf::field::Field;
+use fgf::kernel::{Backend, backend_for};
 
 use crate::{BivariatePolynomial, ConfigError, Polynomial, PolynomialProductScratch};
 
 use super::roth_ruckenstein::{
-    compare_polynomials, constant_y_polynomial, enforce_limit, roth_ruckenstein_roots,
+    RothRuckensteinScratch, compare_polynomials, constant_y_polynomial, enforce_limit,
+    roth_ruckenstein_roots_into,
 };
 use super::{BaseFieldRoots, RootError, RothRuckensteinLimits, base_field_roots};
 
@@ -133,6 +134,8 @@ pub struct AlekhnovichScratch<F: ButterflyKernels> {
     frames: Vec<DncFrame<F>>,
     completed: Option<Vec<AffineRootFamily<F>>>,
     products: PolynomialProductScratch<F>,
+    transformed: BivariatePolynomial<F>,
+    roth: RothRuckensteinScratch<F>,
 }
 
 impl<F: ButterflyKernels> AlekhnovichScratch<F> {
@@ -143,6 +146,8 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
             frames: Vec::new(),
             completed: None,
             products: PolynomialProductScratch::new(),
+            transformed: BivariatePolynomial::zero(),
+            roth: RothRuckensteinScratch::new(),
         }
     }
 
@@ -150,6 +155,12 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
     #[must_use]
     pub fn frame_capacity(&self) -> usize {
         self.frames.capacity()
+    }
+
+    /// Retained divide-and-conquer frame and Roth–Ruckenstein pool capacity.
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.frames.capacity() + self.roth.capacity()
     }
 
     fn clear(&mut self) {
@@ -179,8 +190,25 @@ pub fn alekhnovich_roots<F: ButterflyKernels>(
     limits: AlekhnovichLimits,
     scratch: &mut AlekhnovichScratch<F>,
 ) -> Result<Vec<Polynomial<F>>, RootError> {
+    let mut output = Vec::new();
+    alekhnovich_roots_into(polynomial, max_degree, limits, scratch, &mut output)?;
+    Ok(output)
+}
+
+/// Extract every bounded-degree root into reusable `output` storage.
+///
+/// Below the Roth–Ruckenstein crossover the extraction runs entirely on pooled
+/// scratch and performs no allocation once warmed; larger inputs use the
+/// divide-and-conquer path and replace `output`.
+pub(crate) fn alekhnovich_roots_into<F: ButterflyKernels>(
+    polynomial: &BivariatePolynomial<F>,
+    max_degree: usize,
+    limits: AlekhnovichLimits,
+    scratch: &mut AlekhnovichScratch<F>,
+    output: &mut Vec<Polynomial<F>>,
+) -> Result<(), RootError> {
     scratch.clear();
-    let result = alekhnovich_roots_inner(polynomial, max_degree, limits, scratch);
+    let result = alekhnovich_roots_inner(polynomial, max_degree, limits, scratch, output);
     scratch.clear();
     result
 }
@@ -190,7 +218,8 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
     max_degree: usize,
     limits: AlekhnovichLimits,
     scratch: &mut AlekhnovichScratch<F>,
-) -> Result<Vec<Polynomial<F>>, RootError> {
+    output: &mut Vec<Polynomial<F>>,
+) -> Result<(), RootError> {
     if polynomial.is_zero() {
         return Err(RootError::ZeroBivariatePolynomial);
     }
@@ -198,32 +227,54 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
         .y_degree()
         .ok_or(RootError::ZeroBivariatePolynomial)?;
     if y_degree == 0 {
-        return Ok(Vec::new());
+        output.clear();
+        return Ok(());
     }
-
     let initial_valuation = polynomial
         .x_valuation()
         .ok_or(RootError::ZeroBivariatePolynomial)?;
-    let initial = polynomial.divide_by_x_power(initial_valuation)?;
-    let composition_degree = initial
+    let poly_weighted_degree = polynomial
         .weighted_degree(max_degree)?
         .ok_or(RootError::ZeroBivariatePolynomial)?;
+    let composition_degree = poly_weighted_degree.checked_sub(initial_valuation).ok_or(
+        ConfigError::GeometryOverflow {
+            context: "Alekhnovich exact-composition precision",
+        },
+    )?;
     let precision = composition_degree
         .checked_add(1)
         .ok_or(ConfigError::GeometryOverflow {
             context: "Alekhnovich exact-composition precision",
         })?;
-    let weighted_size = precision.checked_mul(initial.y_coefficient_count()).ok_or(
-        ConfigError::GeometryOverflow {
+    let weighted_size = precision
+        .checked_mul(polynomial.y_coefficient_count())
+        .ok_or(ConfigError::GeometryOverflow {
             context: "Alekhnovich weighted input size",
-        },
-    )?;
+        })?;
 
     enforce_limit(
         "Alekhnovich coefficients",
         weighted_size,
         limits.max_coefficients,
     )?;
+
+    let crossover = if limits.backend_adaptive_crossover && backend_for::<F>() == Backend::Scalar {
+        usize::MAX
+    } else {
+        limits.roth_ruckenstein_crossover
+    };
+    if weighted_size <= crossover {
+        return roth_ruckenstein_roots_into(
+            polynomial,
+            max_degree,
+            RothRuckensteinLimits::new(limits.max_work_items, limits.max_output_roots),
+            &mut scratch.roth,
+            output,
+        );
+    }
+
+    // The exact-composition frame is only needed by the divide-and-conquer path.
+    let initial = polynomial.divide_by_x_power(initial_valuation)?;
     let initial_bytes = weighted_size
         .checked_mul(F::BYTES)
         .and_then(|bytes| {
@@ -241,19 +292,6 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
         initial_bytes,
         limits.max_scratch_bytes,
     )?;
-
-    let crossover = if limits.backend_adaptive_crossover && backend_for::<F>() == Backend::Scalar {
-        usize::MAX
-    } else {
-        limits.roth_ruckenstein_crossover
-    };
-    if weighted_size <= crossover {
-        return roth_ruckenstein_roots(
-            polynomial,
-            max_degree,
-            RothRuckensteinLimits::new(limits.max_work_items, limits.max_output_roots),
-        );
-    }
 
     let mut budget = Budget::new(weighted_size, initial_bytes);
     push_frame(
@@ -360,13 +398,14 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
                         context: "Alekhnovich transformed coefficient bound",
                     })?;
                 budget.charge_materialization::<F>(transform_bound, 0, limits)?;
-                let transformed = frame.polynomial.substitute_y_affine_truncated_fast(
+                frame.polynomial.substitute_y_affine_truncated_fast_into(
                     &family.prefix,
                     family.tail_degree,
                     frame.precision,
                     &mut scratch.products,
+                    &mut scratch.transformed,
                 )?;
-                let Some(valuation) = transformed.x_valuation() else {
+                let Some(valuation) = scratch.transformed.x_valuation() else {
                     insert_family(&mut refined, family, &mut budget, limits)?;
                     frame.state = FrameState::Refine {
                         coarse,
@@ -394,7 +433,7 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
                 }
                 let residual_precision = frame.precision - valuation;
                 budget.charge_materialization::<F>(transform_bound, 0, limits)?;
-                let residual = transformed.divide_by_x_power(valuation)?;
+                let residual = scratch.transformed.divide_by_x_power(valuation)?;
                 frame.state = FrameState::AwaitTail {
                     coarse,
                     next,
@@ -443,7 +482,8 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
     }
 
     let families = take_completed(scratch)?;
-    materialize_candidates(polynomial, max_degree, y_degree, families, limits)
+    *output = materialize_candidates(polynomial, max_degree, y_degree, families, limits)?;
+    Ok(())
 }
 
 struct DncFrame<F: ButterflyKernels> {

@@ -2,26 +2,30 @@
 
 mod koetter;
 mod module;
+mod plan;
 
 pub use koetter::{
     KoetterScratch, interpolate_koetter, interpolate_koetter_into, interpolate_koetter_with_scratch,
 };
-pub use module::{MODULE_INTERPOLATION_CROSSOVER, interpolate_module};
+pub use module::{
+    MODULE_INTERPOLATION_CROSSOVER, ModuleScratch, interpolate_module, interpolate_module_into,
+};
+pub use plan::InterpolationPlan;
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 use alloc::vec::Vec;
 use core::fmt;
 
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 use crate::Polynomial;
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 use crate::geometry::try_zeroed;
 use crate::{BivariatePolynomial, ConfigError, GsParameters};
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 /// One monomial in the weighted interpolation basis.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InterpolationMonomial {
@@ -33,7 +37,7 @@ pub struct InterpolationMonomial {
     pub weighted_degree: usize,
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 /// One Hasse constraint in the fixed lower-set traversal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InterpolationConstraint {
@@ -45,7 +49,7 @@ pub struct InterpolationConstraint {
     pub y_order: usize,
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 /// Hard caps for the explicit reference interpolation matrix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReferenceInterpolationLimits {
@@ -53,7 +57,7 @@ pub struct ReferenceInterpolationLimits {
     max_matrix_bytes: usize,
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 impl ReferenceInterpolationLimits {
     /// Construct explicit element and byte caps.
     #[must_use]
@@ -82,6 +86,11 @@ impl ReferenceInterpolationLimits {
 pub enum InterpolationError {
     /// Checked geometry or allocation failed.
     Config(ConfigError),
+    /// The shared weak-Popov reducer rejected the row geometry or termination
+    /// measure.
+    Reduction(gfm::ReduceError),
+    /// A `butterfly-fft` transform buffer had inconsistent geometry.
+    Transform(butterfly_fft::error::TransformLengthError),
     /// Point or received-value length differs from the planned code length.
     LengthMismatch {
         /// Planned number of points.
@@ -98,7 +107,7 @@ pub enum InterpolationError {
         /// Index of the duplicate occurrence.
         second: usize,
     },
-    #[cfg(feature = "diagnostic")]
+    #[cfg(feature = "internals")]
     /// The explicit reference matrix exceeds a hard caller limit.
     ReferenceLimitExceeded {
         /// Bounded resource name.
@@ -108,7 +117,7 @@ pub enum InterpolationError {
         /// Configured maximum.
         limit: usize,
     },
-    #[cfg(feature = "diagnostic")]
+    #[cfg(feature = "internals")]
     /// Elimination found no nonzero homogeneous solution.
     NoNonzeroSolution,
     /// A reconstructed polynomial violated an interpolation invariant.
@@ -145,7 +154,7 @@ impl fmt::Display for InterpolationError {
                     "evaluation points {first} and {second} are equal"
                 )
             }
-            #[cfg(feature = "diagnostic")]
+            #[cfg(feature = "internals")]
             Self::ReferenceLimitExceeded {
                 resource,
                 required,
@@ -154,7 +163,7 @@ impl fmt::Display for InterpolationError {
                 formatter,
                 "reference {resource} requires {required}, exceeding limit {limit}"
             ),
-            #[cfg(feature = "diagnostic")]
+            #[cfg(feature = "internals")]
             Self::NoNonzeroSolution => {
                 formatter.write_str("reference interpolation has no nonzero nullspace vector")
             }
@@ -164,6 +173,8 @@ impl fmt::Display for InterpolationError {
                     "interpolation produced an invalid result: {reason}"
                 )
             }
+            Self::Transform(error) => error.fmt(formatter),
+            Self::Reduction(error) => error.fmt(formatter),
             Self::ConstraintViolation {
                 point_index,
                 x_order,
@@ -182,10 +193,22 @@ impl From<ConfigError> for InterpolationError {
     }
 }
 
+impl From<gfm::ReduceError> for InterpolationError {
+    fn from(error: gfm::ReduceError) -> Self {
+        Self::Reduction(error)
+    }
+}
+
+impl From<butterfly_fft::error::TransformLengthError> for InterpolationError {
+    fn from(error: butterfly_fft::error::TransformLengthError) -> Self {
+        Self::Transform(error)
+    }
+}
+
 #[cfg(feature = "std")]
 impl std::error::Error for InterpolationError {}
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 /// Enumerate all allowed monomials in deterministic `Y`-major order.
 pub fn reference_monomials(
     parameters: GsParameters,
@@ -227,7 +250,7 @@ pub fn reference_monomials(
 }
 
 /// Enumerate constraints point-major, then by increasing total Hasse order.
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 /// Within one total order, `X` order decreases while `Y` order increases.
 pub fn reference_constraints(
     parameters: GsParameters,
@@ -260,7 +283,7 @@ pub fn reference_constraints(
     Ok(constraints)
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 /// Construct a nonzero interpolation polynomial with an explicit Hasse matrix.
 ///
 /// This backend is intentionally limited to small geometries and is intended
@@ -317,7 +340,7 @@ fn validate_inputs<E: Elem>(
     Ok(())
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 fn enforce_limit(
     resource: &'static str,
     required: usize,
@@ -334,7 +357,7 @@ fn enforce_limit(
     }
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 fn materialize_matrix<F: FieldKernels>(
     monomials: &[InterpolationMonomial],
     constraints: &[InterpolationConstraint],
@@ -402,7 +425,7 @@ fn fill_powers<E: Elem>(powers: &mut [E], value: E) {
     }
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 fn nonzero_nullspace_vector<E: Elem>(
     matrix: &mut [E],
     rows: usize,
@@ -463,7 +486,7 @@ fn nonzero_nullspace_vector<E: Elem>(
     Ok(solution)
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 fn reconstruct<F: FieldKernels>(
     parameters: GsParameters,
     monomials: &[InterpolationMonomial],

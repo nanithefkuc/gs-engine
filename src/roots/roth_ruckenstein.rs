@@ -1,13 +1,14 @@
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
 
 use crate::geometry::try_zeroed;
 use crate::{BivariatePolynomial, ConfigError, Polynomial};
 
-use super::field_roots::element_key;
-use super::{BaseFieldRoots, RootError, base_field_roots};
+use super::RootError;
+use super::field_roots::{FieldRootScratch, base_field_roots_into, element_key};
 
 /// Caller-provided limits for Roth–Ruckenstein prefix lifting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +40,94 @@ impl RothRuckensteinLimits {
     }
 }
 
+/// Caller-owned reusable storage for Roth–Ruckenstein prefix lifting.
+///
+/// The frame stack, transformed-node rows, base-field factorization, and
+/// candidate polynomials are all recycled through internal pools, so a warmed
+/// extraction over a changed input performs no heap allocation.
+pub(crate) struct RothRuckensteinScratch<F: FieldKernels> {
+    field_roots: FieldRootScratch<F>,
+    prefix: Vec<F::Elem>,
+    frames: Vec<Frame<F>>,
+    frame_pool: Vec<Frame<F>>,
+    row_pool: Vec<Polynomial<F>>,
+    sub_powers: Vec<F::Elem>,
+    shifted: BivariatePolynomial<F>,
+    constant_coeffs: Vec<F::Elem>,
+    constant_y: Polynomial<F>,
+    compose_acc: Polynomial<F>,
+    compose_product: Polynomial<F>,
+    candidate: Polynomial<F>,
+    candidate_pool: Vec<Polynomial<F>>,
+}
+
+impl<F: FieldKernels> RothRuckensteinScratch<F> {
+    /// Construct empty reusable lifting scratch.
+    pub(crate) const fn new() -> Self {
+        Self {
+            field_roots: FieldRootScratch::new(),
+            prefix: Vec::new(),
+            frames: Vec::new(),
+            frame_pool: Vec::new(),
+            row_pool: Vec::new(),
+            sub_powers: Vec::new(),
+            shifted: BivariatePolynomial::zero(),
+            constant_coeffs: Vec::new(),
+            constant_y: Polynomial::zero(),
+            compose_acc: Polynomial::zero(),
+            compose_product: Polynomial::zero(),
+            candidate: Polynomial::zero(),
+            candidate_pool: Vec::new(),
+        }
+    }
+
+    /// Retained frame-stack and pool capacity available to a subsequent lift.
+    pub(crate) fn capacity(&self) -> usize {
+        self.frames.capacity()
+            + self.frame_pool.capacity()
+            + self.row_pool.capacity()
+            + self.candidate_pool.capacity()
+            + self.field_roots.capacity()
+    }
+
+    fn recycle_frames(&mut self) {
+        while let Some(mut frame) = self.frames.pop() {
+            frame.roots.clear();
+            self.frame_pool.push(frame);
+        }
+    }
+}
+
+impl<F: FieldKernels> Default for RothRuckensteinScratch<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+struct Frame<F: FieldKernels> {
+    transformed: BivariatePolynomial<F>,
+    roots: Vec<F::Elem>,
+    next_root: usize,
+    depth: usize,
+}
+
+impl<F: FieldKernels> Frame<F> {
+    const fn empty() -> Self {
+        Self {
+            transformed: BivariatePolynomial::zero(),
+            roots: Vec::new(),
+            next_root: 0,
+            depth: 0,
+        }
+    }
+
+    fn next_root(&mut self) -> Option<F::Elem> {
+        let root = self.roots.get(self.next_root).copied()?;
+        self.next_root += 1;
+        Some(root)
+    }
+}
+
 /// Find every polynomial `f` of degree at most `max_degree` satisfying
 /// `Q(X, f(X)) == 0`.
 ///
@@ -50,6 +139,29 @@ pub fn roth_ruckenstein_roots<F: FieldKernels>(
     max_degree: usize,
     limits: RothRuckensteinLimits,
 ) -> Result<Vec<Polynomial<F>>, RootError> {
+    let mut scratch = RothRuckensteinScratch::new();
+    let mut output = Vec::new();
+    roth_ruckenstein_roots_into(polynomial, max_degree, limits, &mut scratch, &mut output)?;
+    Ok(output)
+}
+
+/// Write every bounded-degree polynomial root into reusable `output` storage.
+///
+/// Existing `output` entries are recycled into an internal pool first. After a
+/// warm-up over the same geometry, alternating a changed `polynomial` performs
+/// no heap allocation.
+pub(crate) fn roth_ruckenstein_roots_into<F: FieldKernels>(
+    polynomial: &BivariatePolynomial<F>,
+    max_degree: usize,
+    limits: RothRuckensteinLimits,
+    scratch: &mut RothRuckensteinScratch<F>,
+    output: &mut Vec<Polynomial<F>>,
+) -> Result<(), RootError> {
+    scratch.recycle_frames();
+    while let Some(mut candidate) = output.pop() {
+        candidate.set_zero();
+        scratch.candidate_pool.push(candidate);
+    }
     if polynomial.is_zero() {
         return Err(RootError::ZeroBivariatePolynomial);
     }
@@ -62,65 +174,99 @@ pub fn roth_ruckenstein_roots<F: FieldKernels>(
         .y_degree()
         .ok_or(RootError::ZeroBivariatePolynomial)?;
     if y_degree == 0 {
-        return Ok(Vec::new());
+        return Ok(());
     }
     enforce_limit("Roth–Ruckenstein work items", 1, limits.max_work_items)?;
 
+    if scratch.prefix.len() < coefficient_count {
+        scratch
+            .prefix
+            .try_reserve(coefficient_count - scratch.prefix.len())
+            .map_err(|_| ConfigError::AllocationFailed {
+                context: "Roth–Ruckenstein coefficient prefix",
+                elements: coefficient_count,
+                element_size: core::mem::size_of::<F::Elem>(),
+            })?;
+        scratch.prefix.resize(coefficient_count, F::Elem::ZERO);
+    }
+    scratch.prefix[..coefficient_count].fill(F::Elem::ZERO);
     let initial_valuation = polynomial
         .x_valuation()
         .ok_or(RootError::ZeroBivariatePolynomial)?;
-    let initial = polynomial.divide_by_x_power(initial_valuation)?;
-    let initial_frame = make_frame(initial, 0)?;
-    if initial_frame.roots.is_empty() {
-        return Ok(Vec::new());
+    let mut initial = scratch.frame_pool.pop().unwrap_or_else(Frame::empty);
+    polynomial.divide_by_x_power_into(
+        initial_valuation,
+        &mut scratch.row_pool,
+        &mut initial.transformed,
+    )?;
+    fill_frame_roots(
+        &initial.transformed,
+        &mut scratch.constant_coeffs,
+        &mut scratch.constant_y,
+        &mut scratch.field_roots,
+        &mut initial.roots,
+    )?;
+    initial.depth = 0;
+    initial.next_root = 0;
+    if initial.roots.is_empty() {
+        initial.roots.clear();
+        scratch.frame_pool.push(initial);
+        return Ok(());
     }
-
-    let mut prefix =
-        try_zeroed::<F::Elem>("Roth–Ruckenstein coefficient prefix", coefficient_count)?;
-    let mut frames = Vec::new();
-    frames
-        .try_reserve_exact(coefficient_count)
-        .map_err(|_| ConfigError::AllocationFailed {
-            context: "Roth–Ruckenstein frame stack",
-            elements: coefficient_count,
-            element_size: core::mem::size_of::<Frame<F>>(),
-        })?;
-    frames.push(initial_frame);
-    let output_capacity = y_degree.min(limits.max_output_roots);
-    let mut candidates = Vec::new();
-    candidates
-        .try_reserve_exact(output_capacity)
-        .map_err(|_| ConfigError::AllocationFailed {
-            context: "Roth–Ruckenstein candidates",
-            elements: output_capacity,
-            element_size: core::mem::size_of::<Polynomial<F>>(),
-        })?;
+    if scratch.frames.capacity() < coefficient_count {
+        let additional = coefficient_count - scratch.frames.capacity();
+        scratch
+            .frames
+            .try_reserve(additional)
+            .map_err(|_| ConfigError::AllocationFailed {
+                context: "Roth–Ruckenstein frame stack",
+                elements: coefficient_count,
+                element_size: core::mem::size_of::<Frame<F>>(),
+            })?;
+    }
+    scratch.frames.push(initial);
     let mut work_items = 1_usize;
 
-    while let Some(frame) = frames.last_mut() {
-        let Some(root) = frame.next_root() else {
-            frames.pop();
-            continue;
+    loop {
+        let (root, depth) = {
+            let Some(frame) = scratch.frames.last_mut() else {
+                break;
+            };
+            match frame.next_root() {
+                Some(root) => (root, frame.depth),
+                None => {
+                    let mut done = scratch.frames.pop().expect("nonempty frame stack");
+                    done.roots.clear();
+                    scratch.frame_pool.push(done);
+                    continue;
+                }
+            }
         };
-        let depth = frame.depth;
-        prefix[depth] = root;
+        scratch.prefix[depth] = root;
 
         if depth + 1 == coefficient_count {
-            let candidate = Polynomial::<F>::from_coefficients(&prefix)?;
-            if polynomial.has_root(&candidate)?
-                && !candidates.iter().any(|existing| existing == &candidate)
-            {
-                if candidates.len() >= y_degree {
+            scratch
+                .candidate
+                .assign_coefficients(&scratch.prefix[..coefficient_count])?;
+            let is_root = polynomial.has_root_with(
+                &scratch.candidate,
+                &mut scratch.compose_acc,
+                &mut scratch.compose_product,
+            )?;
+            if is_root && !output.iter().any(|existing| existing == &scratch.candidate) {
+                if output.len() >= y_degree {
                     return Err(RootError::FactorizationInvariant {
                         reason: "verified polynomial roots exceed the bivariate Y-degree",
                     });
                 }
                 enforce_limit(
                     "Roth–Ruckenstein output roots",
-                    candidates.len() + 1,
+                    output.len() + 1,
                     limits.max_output_roots,
                 )?;
-                candidates.push(candidate);
+                let mut buffer = scratch.candidate_pool.pop().unwrap_or_default();
+                buffer.assign_from(&scratch.candidate);
+                output.push(buffer);
             }
             continue;
         }
@@ -136,79 +282,110 @@ pub fn roth_ruckenstein_roots<F: FieldKernels>(
             required_work_items,
             limits.max_work_items,
         )?;
-        let child = {
-            let transformed = &frames
-                .last()
-                .ok_or(RootError::FactorizationInvariant {
-                    reason: "the active Roth–Ruckenstein frame disappeared",
-                })?
-                .transformed;
-            let shifted = transformed.substitute_y_linear(root)?;
-            let valuation = shifted
-                .x_valuation()
-                .ok_or(RootError::FactorizationInvariant {
-                    reason: "a nonzero Y substitution produced zero",
-                })?;
-            shifted.divide_by_x_power(valuation)?
-        };
-        let child_frame = make_frame(child, depth + 1)?;
+
+        let index = scratch.frames.len() - 1;
+        scratch.frames[index].transformed.substitute_y_linear_into(
+            root,
+            &mut scratch.sub_powers,
+            &mut scratch.row_pool,
+            &mut scratch.shifted,
+        )?;
+        let valuation = scratch
+            .shifted
+            .x_valuation()
+            .ok_or(RootError::FactorizationInvariant {
+                reason: "a nonzero Y substitution produced zero",
+            })?;
+        let mut child = scratch.frame_pool.pop().unwrap_or_else(Frame::empty);
+        scratch.shifted.divide_by_x_power_into(
+            valuation,
+            &mut scratch.row_pool,
+            &mut child.transformed,
+        )?;
+        fill_frame_roots(
+            &child.transformed,
+            &mut scratch.constant_coeffs,
+            &mut scratch.constant_y,
+            &mut scratch.field_roots,
+            &mut child.roots,
+        )?;
+        child.depth = depth + 1;
+        child.next_root = 0;
         work_items = required_work_items;
-        if !child_frame.roots.is_empty() {
-            frames.push(child_frame);
+        if child.roots.is_empty() {
+            child.roots.clear();
+            scratch.frame_pool.push(child);
+        } else {
+            scratch.frames.push(child);
         }
     }
 
-    candidates.sort_by(|left, right| compare_polynomials::<F>(left, right));
-    candidates.dedup();
-    if candidates.len() > y_degree {
+    output.sort_by(|left, right| compare_polynomials::<F>(left, right));
+    output.dedup();
+    if output.len() > y_degree {
         return Err(RootError::FactorizationInvariant {
             reason: "deduplicated polynomial roots exceed the bivariate Y-degree",
         });
     }
-    for candidate in &candidates {
-        if !polynomial.has_root(candidate)? {
+    for candidate in output.iter() {
+        if !polynomial.has_root_with(
+            candidate,
+            &mut scratch.compose_acc,
+            &mut scratch.compose_product,
+        )? {
             return Err(RootError::FactorizationInvariant {
                 reason: "the final candidate list contains a nonroot",
             });
         }
     }
-    Ok(candidates)
+    Ok(())
 }
 
-struct Frame<F: FieldKernels> {
-    transformed: BivariatePolynomial<F>,
-    roots: Vec<F::Elem>,
-    next_root: usize,
-    depth: usize,
-}
-
-impl<F: FieldKernels> Frame<F> {
-    fn next_root(&mut self) -> Option<F::Elem> {
-        let root = self.roots.get(self.next_root).copied()?;
-        self.next_root += 1;
-        Some(root)
+/// Extract the constant-`X` polynomial and its base-field roots into `roots`.
+fn fill_frame_roots<F: FieldKernels>(
+    transformed: &BivariatePolynomial<F>,
+    coeffs: &mut Vec<F::Elem>,
+    constant_y: &mut Polynomial<F>,
+    field_roots: &mut FieldRootScratch<F>,
+    roots: &mut Vec<F::Elem>,
+) -> Result<(), RootError> {
+    constant_y_polynomial_into(transformed, coeffs, constant_y)?;
+    if base_field_roots_into(constant_y, field_roots, roots)? {
+        return Err(RootError::FactorizationInvariant {
+            reason: "an X-normalized transformed polynomial has zero constant-X row",
+        });
     }
+    Ok(())
 }
 
-fn make_frame<F: FieldKernels>(
-    transformed: BivariatePolynomial<F>,
-    depth: usize,
-) -> Result<Frame<F>, RootError> {
-    let constant_y = constant_y_polynomial(&transformed)?;
-    let roots = match base_field_roots(&constant_y)? {
-        BaseFieldRoots::All => {
-            return Err(RootError::FactorizationInvariant {
-                reason: "an X-normalized transformed polynomial has zero constant-X row",
-            });
-        }
-        BaseFieldRoots::Finite(roots) => roots,
-    };
-    Ok(Frame {
-        transformed,
-        roots,
-        next_root: 0,
-        depth,
-    })
+/// Extract the constant-`X` coefficient of each `Y` row into `out`.
+fn constant_y_polynomial_into<F: FieldKernels>(
+    polynomial: &BivariatePolynomial<F>,
+    coeffs: &mut Vec<F::Elem>,
+    out: &mut Polynomial<F>,
+) -> Result<(), RootError> {
+    coeffs.clear();
+    let count = polynomial.y_coefficient_count();
+    if coeffs.capacity() < count {
+        coeffs.try_reserve(count - coeffs.capacity()).map_err(|_| {
+            ConfigError::AllocationFailed {
+                context: "Roth–Ruckenstein constant-X polynomial",
+                elements: count,
+                element_size: core::mem::size_of::<F::Elem>(),
+            }
+        })?;
+    }
+    for row in polynomial.y_coefficients() {
+        coeffs.push(row.coefficient(0));
+    }
+    out.assign_coefficients(coeffs)?;
+    if out.is_zero() {
+        Err(RootError::FactorizationInvariant {
+            reason: "an X-normalized polynomial yielded a zero constant-X polynomial",
+        })
+    } else {
+        Ok(())
+    }
 }
 
 pub(super) fn constant_y_polynomial<F: FieldKernels>(

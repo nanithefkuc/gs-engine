@@ -9,9 +9,11 @@ repository = "https://github.com/nanithefkuc/gs-engine"
 
 [features]
 default = ["std", "simd"]
-std = ["fff/std", "cafft/std"]
-simd = ["std", "fff/simd", "cafft/simd"]
-diagnostic = []
+std = ["fgf/std", "butterfly-fft/std", "gfm/std"]
+simd = ["std", "fgf/simd", "butterfly-fft/simd", "gfm/simd"]
+# Unstable implementation APIs for benchmarking and downstream
+# experimentation. Exempt from compatibility guarantees.
+internals = []
 
 [[bench]]
 name = "root_extraction"
@@ -27,6 +29,7 @@ harness = false
 
 [[bench]]
 name = "scoring"
+required-features = ["internals"]
 harness = false
 
 [[bench]]
@@ -34,5 +37,11 @@ name = "interpolation"
 harness = false
 
 [dependencies]
-cafft = { git = "https://github.com/nanithefkuc/cafft.git", rev = "ce8f42af56521e86b73a0bf90affa1caf1363f75", default-features = false }
-fff = { git = "https://github.com/nanithefkuc/fff.git", default-features = false }
+butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
+fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
+gfm = { git = "https://github.com/nanithefkuc/gfm", rev = "184b264f0f433b7365a8180378b3f3e99c1417bf", default-features = false }
+
+
+[dev-dependencies]
+# Default features pull in plotters + rayon, which this harness does not use.
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }

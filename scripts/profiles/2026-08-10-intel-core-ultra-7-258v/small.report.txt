@@ -1,0 +1,658 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 5K of event 'cpu_atom/cycles/Pu'
+# Event count (approx.): 18048100157
+#
+# Children      Self  Command          Shared Object             Symbol
+# ........  ........  ...............  ........................  .........................................................................................................................................................................................................................................................................................................................................................................
+#
+    22.78%    22.70%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at_raw
+            |
+             --21.63%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at_raw
+
+    19.96%    19.56%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::koetter::interpolate_koetter_into
+            |
+            |--7.26%--0x2be4d
+            |          criterion::bencher::Bencher<M>::iter
+            |
+            |--7.10%--gs_engine::decoder::GsPlan<F>::decode_into
+            |          gs_engine::interpolation::koetter::interpolate_koetter_into
+            |
+            |--2.58%--0x2c
+            |          0x7f77b04a5f7d
+            |          gs_engine::decoder::GsPlan<F>::decode_into
+            |          gs_engine::interpolation::koetter::interpolate_koetter_into
+            |
+             --2.07%--criterion::bencher::Bencher<M>::iter
+
+    17.19%    15.10%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem_into
+            |
+             --16.85%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem_into
+
+    10.28%     0.32%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::decoder::GsPlan<F>::decode_into
+            |
+             --10.18%--gs_engine::decoder::GsPlan<F>::decode_into
+                       |
+                        --9.90%--gs_engine::interpolation::koetter::interpolate_koetter_into
+
+     9.84%     0.12%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] criterion::bencher::Bencher<M>::iter
+            |
+             --9.72%--criterion::bencher::Bencher<M>::iter
+
+     7.64%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x000000000002be4d
+            |
+            ---0x2be4d
+               |
+                --7.62%--criterion::bencher::Bencher<M>::iter
+
+     5.91%     5.16%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated_into
+            |
+            |--3.63%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated_into
+            |
+             --1.70%--0x1
+                       gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated_into
+
+     5.23%     4.67%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::process_factor
+            |
+             --5.19%--gs_engine::roots::field_roots::process_factor
+
+     5.04%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000001
+            |
+            ---0x1
+               |
+               |--2.14%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated_into
+               |
+                --1.14%--<core::iter::adapters::zip::Zip<A,B> as core::iter::adapters::zip::ZipImpl<A,B>>::new
+
+     4.01%     4.01%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::validate_result
+            |
+             --3.08%--0x3
+                       gs_engine::interpolation::validate_result
+
+     3.57%     3.57%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] <core::iter::adapters::zip::Zip<A,B> as core::iter::adapters::zip::ZipImpl<A,B>>::new
+            |
+            |--2.41%--<core::iter::adapters::zip::Zip<A,B> as core::iter::adapters::zip::ZipImpl<A,B>>::new
+            |
+             --1.14%--0x1
+                       <core::iter::adapters::zip::Zip<A,B> as core::iter::adapters::zip::ZipImpl<A,B>>::new
+
+     3.57%     3.57%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] <core::iter::adapters::map::Map<I,F> as core::iter::traits::iterator::Iterator>::fold
+            |
+            ---<core::iter::adapters::map::Map<I,F> as core::iter::traits::iterator::Iterator>::fold
+
+     3.10%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000003
+            |
+            ---0x3
+               |
+                --3.08%--gs_engine::interpolation::validate_result
+
+     2.93%     2.93%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::fill_powers
+            |
+            |--1.73%--gs_engine::interpolation::fill_powers
+            |
+             --1.19%--0x2
+                       gs_engine::interpolation::fill_powers
+
+     2.80%     1.99%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::gcd_into
+            |
+             --2.55%--gs_engine::roots::field_roots::gcd_into
+
+     2.62%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x000000000000002c
+            |
+            ---0x2c
+               0x7f77b04a5f7d
+               gs_engine::decoder::GsPlan<F>::decode_into
+               gs_engine::interpolation::koetter::interpolate_koetter_into
+
+     2.62%     0.00%  decoder-b1bbad7  libc.so.6                 [.] 0x00007f77b04a5f7d
+            |
+            ---0x7f77b04a5f7d
+               gs_engine::decoder::GsPlan<F>::decode_into
+               gs_engine::interpolation::koetter::interpolate_koetter_into
+
+     2.02%     2.02%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::base_field_roots_into
+            |
+            ---gs_engine::roots::field_roots::base_field_roots_into
+
+     1.98%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000002
+            |
+            ---0x2
+               |
+                --1.19%--gs_engine::interpolation::fill_powers
+
+     1.92%     0.26%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::alekhnovich::alekhnovich_roots_into
+            |
+            ---gs_engine::roots::alekhnovich::alekhnovich_roots_into
+               |
+                --1.65%--gs_engine::roots::roth_ruckenstein::roth_ruckenstein_roots_into
+
+     1.71%     1.19%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::roth_ruckenstein::roth_ruckenstein_roots_into
+            |
+             --1.13%--gs_engine::roots::alekhnovich::alekhnovich_roots_into
+                       gs_engine::roots::roth_ruckenstein::roth_ruckenstein_roots_into
+
+     1.07%     1.07%  decoder-b1bbad7  libc.so.6                 [.] 0x0000000000173e08
+     1.07%     0.00%  decoder-b1bbad7  libc.so.6                 [.] 0x00007f77b0573e08
+            |
+            ---0x7f77b0573e08
+
+
+
+# Samples: 39  of event 'cpu_core/cycles/Pu'
+# Event count (approx.): 84988179
+#
+# Children      Self  Command          Shared Object         Symbol
+# ........  ........  ...............  ....................  ..............................................................................................................................................................................................................................................................................
+#
+     7.56%     0.00%  cargo            [unknown]             [.] 0xffffffff82c01280
+            |
+            ---0xffffffff82c01280
+
+     6.83%     6.83%  cargo            libc.so.6             [.] cfree
+            |
+             --3.47%--0xdb13a97f5929e544
+                       git_repository__cleanup
+                       __libc_free (inlined)
+
+     6.40%     2.82%  cargo            cargo                 [.] cargo::core::summary::build_feature_map
+            |
+            |--3.59%--cargo::core::summary::build_feature_map
+            |          cargo_util_schemas::restricted_names::validate_feature_name
+            |
+             --2.82%--0x7
+                       cargo::core::summary::build_feature_map
+
+     6.34%     6.34%  cargo            libc.so.6             [.] malloc
+     6.27%     0.00%  cargo            [unknown]             [.] 0x0000000000000007
+            |
+            ---0x7
+               |
+               |--3.45%--<indexmap::map::core::IndexMapCore<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>>>::insert_unique
+               |
+                --2.82%--cargo::core::summary::build_feature_map
+
+     5.08%     5.08%  cargo            libc.so.6             [.] 0x00000000000a6064
+            |
+             --1.71%--0x55d17c236ee4
+                       0x55d17c22cb4a
+                       0x55d17c22fe25
+                       0x55d17c21ddef
+                       0x55d17c21edf0
+                       0x55d17c21f28e
+                       0x55d17c21edf0
+                       0x55d17c21ddef
+                       0x55d17c2221f7
+                       0x7f69e82a6064
+
+     3.62%     3.62%  cargo            cargo                 [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&cargo::core::compiler::unit::Unit>
+            |
+            ---0x2
+               cargo::core::compiler::compile
+               <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&cargo::core::compiler::unit::Unit>
+
+     3.62%     0.00%  cargo            [unknown]             [.] 0x0000000000000002
+            |
+            ---0x2
+               cargo::core::compiler::compile
+               <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&cargo::core::compiler::unit::Unit>
+
+     3.62%     0.00%  cargo            cargo                 [.] cargo::core::compiler::compile
+            |
+            ---cargo::core::compiler::compile
+               <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&cargo::core::compiler::unit::Unit>
+
+     3.59%     0.00%  cargo            rustup                [.] 0x000055d17c22fe25
+            |
+            ---0x55d17c22fe25
+               |
+               |--2.52%--0x55d17c21ddef
+               |          0x55d17c21edf0
+               |          |
+               |           --1.71%--0x55d17c21f28e
+               |                     0x55d17c21edf0
+               |                     0x55d17c21ddef
+               |                     0x55d17c2221f7
+               |                     0x7f69e82a6064
+               |
+                --1.07%--0x55d17c21e6fc
+                          0x55d17c21f156
+                          0x55d17c22431c
+                          0x55d17c21ee83
+                          0x55d17c223818
+                          0x55d17c223d74
+                          0x55d17c21f156
+                          0x55d17c2241b9
+                          0x55d17c21cf78
+                          0x55d17c22268f
+
+     3.59%     3.59%  cargo            cargo                 [.] std::path::Path::_join
+            |
+            ---<cargo::core::workspace::Workspace>::default_target_dir
+               _join (inlined)
+
+     3.59%     0.00%  cargo            cargo                 [.] <cargo::core::workspace::Workspace>::default_target_dir
+            |
+            ---<cargo::core::workspace::Workspace>::default_target_dir
+               _join (inlined)
+
+     3.59%     0.00%  cargo            cargo                 [.] _join (inlined)
+            |
+            ---_join (inlined)
+
+     3.59%     3.59%  cargo            cargo                 [.] cargo_util_schemas::restricted_names::validate_feature_name
+            |
+            ---<cargo::core::summary::Summary>::new::<&str>
+               cargo::core::summary::build_feature_map
+               cargo_util_schemas::restricted_names::validate_feature_name
+
+     3.59%     0.00%  cargo            cargo                 [.] <cargo::core::summary::Summary>::new::<&str>
+            |
+            ---<cargo::core::summary::Summary>::new::<&str>
+               cargo::core::summary::build_feature_map
+               cargo_util_schemas::restricted_names::validate_feature_name
+
+     3.49%     3.49%  cargo            cargo                 [.] <cargo::core::manifest::TargetInner as core::hash::Hash>::hash::<std::hash::random::DefaultHasher>
+            |
+            ---0x4
+               <cargo::core::manifest::TargetInner as core::hash::Hash>::hash::<std::hash::random::DefaultHasher>
+
+     3.49%     0.00%  cargo            [unknown]             [.] 0x0000000000000004
+            |
+            ---0x4
+               <cargo::core::manifest::TargetInner as core::hash::Hash>::hash::<std::hash::random::DefaultHasher>
+
+     3.47%     0.00%  cargo            [unknown]             [.] 0xdb13a97f5929e544
+            |
+            ---0xdb13a97f5929e544
+               git_repository__cleanup
+               __libc_free (inlined)
+
+     3.47%     0.00%  cargo            cargo                 [.] git_repository__cleanup
+            |
+            ---git_repository__cleanup
+               __libc_free (inlined)
+
+     3.47%     0.00%  cargo            libc.so.6             [.] __libc_free (inlined)
+            |
+            ---__libc_free (inlined)
+
+     3.45%     3.45%  cargo            cargo                 [.] <indexmap::map::core::IndexMapCore<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>>>::insert_unique
+            |
+            ---0x7
+               <indexmap::map::core::IndexMapCore<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>>>::insert_unique
+
+     3.45%     3.45%  cargo            cargo                 [.] bn_mul_add_words
+            |
+            ---bn_mul_add_words
+
+     3.45%     3.45%  cargo            libc.so.6             [.] 0x0000000000173e15
+     3.41%     3.41%  cargo            cargo                 [.] <toml::map::Map<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>>>::entry::<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>>
+            |
+            ---0x320a8d5b
+               <toml::map::Map<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>>>::entry::<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>>
+
+     3.41%     0.00%  cargo            [unknown]             [.] 0x00000000320a8d5b
+            |
+            ---0x320a8d5b
+               <toml::map::Map<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>>>::entry::<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>>
+
+     3.41%     3.41%  cargo            cargo                 [.] <cargo::util::interning::InternedString as core::convert::From<alloc::borrow::Cow<str>>>::from
+            |
+            ---<cargo::util::interning::InternedString as core::convert::From<alloc::borrow::Cow<str>>>::from
+
+     3.28%     3.28%  cargo            cargo                 [.] <serde_ignored::MapAccess<toml::de::deserializer::table::TableMapAccess, cargo::util::toml::deserialize_toml::{closure#0}> as serde_core::de::MapAccess>::next_value::<core::option::Option<cargo_util_schemas::manifest::InheritableField<alloc::string::String>>>
+            |
+            ---0x20000000003008f
+               <serde_ignored::MapAccess<toml::de::deserializer::table::TableMapAccess, cargo::util::toml::deserialize_toml::{closure#0}> as serde_core::de::MapAccess>::next_value::<core::option::Option<cargo_util_schemas::manifest::InheritableField<alloc::string::String>>>
+
+     3.28%     0.00%  cargo            [unknown]             [.] 0x020000000003008f
+            |
+            ---0x20000000003008f
+               <serde_ignored::MapAccess<toml::de::deserializer::table::TableMapAccess, cargo::util::toml::deserialize_toml::{closure#0}> as serde_core::de::MapAccess>::next_value::<core::option::Option<cargo_util_schemas::manifest::InheritableField<alloc::string::String>>>
+
+     3.22%     3.22%  cargo            cargo                 [.] ossl_asn1_template_free
+            |
+            ---ossl_asn1_template_free
+
+     3.16%     3.16%  cargo            cargo                 [.] <<cargo_util_schemas::manifest::TomlManifest as serde_core::de::Deserialize>::deserialize::__FieldVisitor as serde_core::de::Visitor>::visit_str::<toml::de::error::Error>
+            |
+            ---0x1e
+               <<cargo_util_schemas::manifest::TomlManifest as serde_core::de::Deserialize>::deserialize::__FieldVisitor as serde_core::de::Visitor>::visit_str::<toml::de::error::Error>
+
+     3.16%     0.00%  cargo            [unknown]             [.] 0x000000000000001e
+            |
+            ---0x1e
+               <<cargo_util_schemas::manifest::TomlManifest as serde_core::de::Deserialize>::deserialize::__FieldVisitor as serde_core::de::Visitor>::visit_str::<toml::de::error::Error>
+
+     3.06%     3.06%  cargo            libc.so.6             [.] _IO_fgets
+            |
+            ---file_gets
+               _IO_fgets
+               _IO_acquire_lock_fct (inlined)
+
+     3.06%     0.00%  cargo            cargo                 [.] file_gets
+            |
+            ---file_gets
+               _IO_fgets
+               _IO_acquire_lock_fct (inlined)
+
+     3.06%     0.00%  cargo            libc.so.6             [.] _IO_acquire_lock_fct (inlined)
+            |
+            ---_IO_acquire_lock_fct (inlined)
+
+     3.05%     3.05%  cargo            cargo                 [.] <toml_parser::lexer::Lexer>::into_vec
+            |
+            ---0xffffffff82c01280
+
+     2.87%     2.87%  cargo            cargo                 [.] <indexmap::map::core::IndexMapCore<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>> as core::clone::Clone>::clone_from
+            |
+            ---0x7f2865616abf
+               <indexmap::map::core::IndexMapCore<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>> as core::clone::Clone>::clone_from
+
+     2.87%     0.00%  cargo            libc.so.6             [.] 0x00007f2865616abf
+            |
+            ---0x7f2865616abf
+               <indexmap::map::core::IndexMapCore<serde_spanned::spanned::Spanned<alloc::borrow::Cow<str>>, serde_spanned::spanned::Spanned<toml::de::parser::devalue::DeValue>> as core::clone::Clone>::clone_from
+
+     2.78%     0.00%  cargo            rustup                [.] 0x000055d17c22cb4a
+            |
+            ---0x55d17c22cb4a
+               0x55d17c22fe25
+               |
+               |--1.71%--0x55d17c21ddef
+               |          0x55d17c21edf0
+               |          0x55d17c21f28e
+               |          0x55d17c21edf0
+               |          0x55d17c21ddef
+               |          0x55d17c2221f7
+               |          0x7f69e82a6064
+               |
+                --1.07%--0x55d17c21e6fc
+                          0x55d17c21f156
+                          0x55d17c22431c
+                          0x55d17c21ee83
+                          0x55d17c223818
+                          0x55d17c223d74
+                          0x55d17c21f156
+                          0x55d17c2241b9
+                          0x55d17c21cf78
+                          0x55d17c22268f
+
+     2.66%     2.66%  cargo            cargo                 [.] asn1_i2d_ex_primitive
+            |
+            ---0x7f28654a77ce
+               asn1_i2d_ex_primitive
+
+     2.66%     0.00%  cargo            libc.so.6             [.] 0x00007f28654a77ce
+            |
+            ---0x7f28654a77ce
+               asn1_i2d_ex_primitive
+
+     2.65%     2.65%  cargo            cargo                 [.] <im_rc::ord::map::OrdMap<cargo::core::package_id::PackageId, im_rc::hash::set::HashSet<cargo::core::dependency::Dependency, rustc_hash::FxBuildHasher>>>::get_mut::<cargo::core::package_id::PackageId>
+            |
+            ---<im_rc::ord::map::OrdMap<cargo::core::package_id::PackageId, im_rc::hash::set::HashSet<cargo::core::dependency::Dependency, rustc_hash::FxBuildHasher>>>::get_mut::<cargo::core::package_id::PackageId>
+
+     2.56%     2.56%  cargo            libc.so.6             [.] 0x00000000000a73cc
+            |
+            ---0xffffffff82c01280
+
+     2.52%     0.00%  cargo            rustup                [.] 0x000055d17c21ddef
+            |
+            ---0x55d17c21ddef
+               0x55d17c21edf0
+               |
+                --1.71%--0x55d17c21f28e
+                          0x55d17c21edf0
+                          0x55d17c21ddef
+                          0x55d17c2221f7
+                          0x7f69e82a6064
+
+     2.52%     0.00%  cargo            rustup                [.] 0x000055d17c21edf0
+            |
+            ---0x55d17c21edf0
+               |
+                --1.71%--0x55d17c21f28e
+                          0x55d17c21edf0
+                          0x55d17c21ddef
+                          0x55d17c2221f7
+                          0x7f69e82a6064
+
+     2.43%     2.43%  cargo            cargo                 [.] <im_rc::nodes::btree::Node<(cargo::core::package_id::PackageId, im_rc::ord::map::OrdMap<cargo::core::package_id::PackageId, im_rc::hash::set::HashSet<cargo::core::dependency::Dependency, rustc_hash::FxBuildHasher>>)>>::path_last::<cargo::core::package_id::PackageId>
+            |
+            ---<im_rc::nodes::btree::Node<(cargo::core::package_id::PackageId, im_rc::ord::map::OrdMap<cargo::core::package_id::PackageId, im_rc::hash::set::HashSet<cargo::core::dependency::Dependency, rustc_hash::FxBuildHasher>>)>>::path_last::<cargo::core::package_id::PackageId>
+
+     2.42%     2.42%  cargo            cargo                 [.] <cargo::core::package_id::PackageIdInner as core::cmp::Ord>::cmp
+            |
+            ---0x7ffcd6af62f800
+               <cargo::core::package_id::PackageIdInner as core::cmp::Ord>::cmp
+
+     2.42%     0.00%  cargo            [unknown]             [.] 0x007ffcd6af62f800
+            |
+            ---0x7ffcd6af62f800
+               <cargo::core::package_id::PackageIdInner as core::cmp::Ord>::cmp
+
+     2.28%     2.28%  cargo            cargo                 [.] ssl_create_cipher_list
+            |
+            ---0xf8c654a77ce
+               ssl_create_cipher_list
+
+     2.28%     0.00%  cargo            [unknown]             [.] 0x00000f8c654a77ce
+            |
+            ---0xf8c654a77ce
+               ssl_create_cipher_list
+
+     2.12%     2.12%  cargo            cargo                 [.] ossl_fnv1a_hash
+            |
+            ---ossl_fnv1a_hash
+
+     2.05%     2.05%  cargo            cargo                 [.] OPENSSL_LH_insert
+            |
+            ---CONF_modules_load_file_ex
+               OPENSSL_LH_insert
+
+     2.05%     0.00%  cargo            cargo                 [.] CONF_modules_load_file_ex
+            |
+            ---CONF_modules_load_file_ex
+               OPENSSL_LH_insert
+
+     1.98%     1.98%  cargo            libc.so.6             [.] 0x0000000000173f6e
+            |
+            ---<clap_builder::builder::command::Command as cargo::util::command_prelude::CommandExt>::_arg
+               0x7f2865573f6e
+
+     1.98%     0.00%  cargo            cargo                 [.] <clap_builder::builder::command::Command as cargo::util::command_prelude::CommandExt>::_arg
+            |
+            ---<clap_builder::builder::command::Command as cargo::util::command_prelude::CommandExt>::_arg
+               0x7f2865573f6e
+
+     1.98%     0.00%  cargo            libc.so.6             [.] 0x00007f2865573f6e
+            |
+            ---0x7f2865573f6e
+
+     1.91%     1.91%  cargo            ld-linux-x86-64.so.2  [.] 0x000000000000fe2f
+            |
+            ---0x7f2865906967
+               0x7f2865907be0
+               0x7f28659063df
+               0x7f2865909b90
+               0x7f28658f84f0
+               0x7f28658f4e2f
+
+     1.91%     0.00%  cargo            ld-linux-x86-64.so.2  [.] 0x00007f2865906967
+            |
+            ---0x7f2865906967
+               0x7f2865907be0
+               0x7f28659063df
+               0x7f2865909b90
+               0x7f28658f84f0
+               0x7f28658f4e2f
+
+     1.91%     0.00%  cargo            ld-linux-x86-64.so.2  [.] 0x00007f2865907be0
+            |
+            ---0x7f2865907be0
+               0x7f28659063df
+               0x7f2865909b90
+               0x7f28658f84f0
+               0x7f28658f4e2f
+
+     1.91%     0.00%  cargo            ld-linux-x86-64.so.2  [.] 0x00007f28659063df
+            |
+            ---0x7f28659063df
+               0x7f2865909b90
+               0x7f28658f84f0
+               0x7f28658f4e2f
+
+     1.91%     0.00%  cargo            ld-linux-x86-64.so.2  [.] 0x00007f2865909b90
+            |
+            ---0x7f2865909b90
+               0x7f28658f84f0
+               0x7f28658f4e2f
+
+     1.91%     0.00%  cargo            ld-linux-x86-64.so.2  [.] 0x00007f28658f84f0
+            |
+            ---0x7f28658f84f0
+               0x7f28658f4e2f
+
+     1.91%     0.00%  cargo            ld-linux-x86-64.so.2  [.] 0x00007f28658f4e2f
+            |
+            ---0x7f28658f4e2f
+
+     1.88%     0.00%  cargo            rustup                [.] 0x000055d17c21f156
+            |
+            ---0x55d17c21f156
+               0x55d17c22431c
+               |
+                --1.07%--0x55d17c21ee83
+                          0x55d17c223818
+                          0x55d17c223d74
+                          0x55d17c21f156
+                          0x55d17c2241b9
+                          0x55d17c21cf78
+                          0x55d17c22268f
+
+     1.88%     0.00%  cargo            rustup                [.] 0x000055d17c22431c
+            |
+            ---0x55d17c22431c
+               |
+                --1.07%--0x55d17c21ee83
+                          0x55d17c223818
+                          0x55d17c223d74
+                          0x55d17c21f156
+                          0x55d17c2241b9
+                          0x55d17c21cf78
+                          0x55d17c22268f
+
+     1.88%     0.00%  cargo            rustup                [.] 0x000055d17c2241b9
+            |
+            ---0x55d17c2241b9
+               |
+                --1.07%--0x55d17c21cf78
+                          0x55d17c22268f
+
+     1.88%     0.00%  cargo            rustup                [.] 0x000055d17c21cf78
+            |
+            ---0x55d17c21cf78
+               |
+                --1.07%--0x55d17c22268f
+
+     1.71%     0.00%  cargo            rustup                [.] 0x000055d17c236ee4
+            |
+            ---0x55d17c236ee4
+               0x55d17c22cb4a
+               0x55d17c22fe25
+               0x55d17c21ddef
+               0x55d17c21edf0
+               0x55d17c21f28e
+               0x55d17c21edf0
+               0x55d17c21ddef
+               0x55d17c2221f7
+               0x7f69e82a6064
+
+     1.71%     0.00%  cargo            rustup                [.] 0x000055d17c21f28e
+            |
+            ---0x55d17c21f28e
+               0x55d17c21edf0
+               0x55d17c21ddef
+               0x55d17c2221f7
+               0x7f69e82a6064
+
+     1.71%     0.00%  cargo            rustup                [.] 0x000055d17c2221f7
+            |
+            ---0x55d17c2221f7
+               0x7f69e82a6064
+
+     1.71%     0.00%  cargo            libc.so.6             [.] 0x00007f69e82a6064
+            |
+            ---0x7f69e82a6064
+
+     1.36%     1.36%  cargo            rustup                [.] 0x00000000004e19f9
+            |
+            ---0xffffffff82c01280
+
+     1.07%     1.07%  cargo            rustup                [.] 0x00000000004de68f
+            |
+            ---0x55d17c22cb4a
+               0x55d17c22fe25
+               0x55d17c21e6fc
+               0x55d17c21f156
+               0x55d17c22431c
+               0x55d17c21ee83
+               0x55d17c223818
+               0x55d17c223d74
+               0x55d17c21f156
+               0x55d17c2241b9
+               0x55d17c21cf78
+               0x55d17c22268f
+
+     1.07%     0.00%  cargo            rustup                [.] 0x000055d17c21e6fc
+            |
+            ---0x55d17c21e6fc
+               0x55d17c21f156
+               0x55d17c22431c
+               0x55d17c21ee83
+               0x55d17c223818
+               0x55d17c223d74
+               0x55d17c21f156
+               0x55d17c2241b9
+               0x55d17c21cf78
+               0x55d17c22268f
+
+     1.07%     0.00%  cargo            rustup                [.] 0x000055d17c21ee83
+            |
+            ---0x55d17c21ee83
+               0x55d17c223818
+               0x55d17c223d74
+               0x55d17c21f156
+               0x55d17c2241b9
+               0x55d17c21cf78
+               0x55d17c22268f
+
+     1.07%     0.00%  cargo            rustup                [.] 0x000055d17c223818
+            |
+            ---0x55d17c223818
+               0x55d17c223d74
+               0x55d17c21f156
+               0x55d17c2241b9
+               0x55d17c21cf78
+               0x55d17c22268f
+
+     1.07%     0.00%  cargo            rustup                [.] 0x000055d17c223d74
+            |
+            ---0x55d17c223d74
+               0x55d17c21f156
+               0x55d17c2241b9
+               0x55d17c21cf78
+               0x55d17c22268f
+
+     1.07%     0.00%  cargo            rustup                [.] 0x000055d17c22268f
+            |
+            ---0x55d17c22268f
+
+
+
+#
+# (Tip: System-wide collection from all CPUs: perf record -a)
+#

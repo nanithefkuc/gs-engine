@@ -1,15 +1,16 @@
 use alloc::vec::Vec;
 
-use cafft::core::kernel::ButterflyKernels;
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use butterfly_fft::core::kernel::ButterflyKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
 
 use crate::ConfigError;
 use crate::geometry::try_zeroed;
 
+use super::afft::multiply_batch_truncated_with;
 use super::arithmetic::binomial_odd;
 use super::{Polynomial, PolynomialError};
-use super::{PolynomialProductScratch, ProductError, ProductStrategy, multiply_batch_truncated};
+use super::{PolynomialProductScratch, ProductError, ProductStrategy};
 
 /// Leading monomial under a `(1, y_weight)` weighted order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,9 +24,21 @@ pub struct WeightedTerm {
 }
 
 /// A bivariate polynomial `Q(X,Y) = sum_j Q_j(X) Y^j`.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BivariatePolynomial<F: FieldKernels> {
     y_coefficients: Vec<Polynomial<F>>,
+}
+
+impl<F: FieldKernels> Clone for BivariatePolynomial<F> {
+    fn clone(&self) -> Self {
+        Self {
+            y_coefficients: self.y_coefficients.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.y_coefficients.clone_from(&source.y_coefficients);
+    }
 }
 
 impl<F: FieldKernels> BivariatePolynomial<F> {
@@ -254,8 +267,7 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
                 if scale.is_zero() {
                     continue;
                 }
-                let term = coefficient.scaled_shifted(scale, target_y)?;
-                output[target_y].add_assign(&term)?;
+                output[target_y].add_scaled_shifted_assign(scale, coefficient, target_y)?;
             }
         }
         Ok(Self::from_y_coefficients(output))
@@ -326,7 +338,7 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
                 if product.is_zero() {
                     continue;
                 }
-                output[target_y].add_assign(&product.shifted(shift)?)?;
+                output[target_y].add_scaled_shifted_assign(F::Elem::ONE, &product, shift)?;
             }
         }
         Ok(Self::from_y_coefficients(output))
@@ -347,93 +359,123 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
     where
         F: ButterflyKernels,
     {
+        let mut output = Self::zero();
+        self.substitute_y_affine_truncated_fast_into(
+            prefix,
+            tail_degree,
+            coefficient_count,
+            scratch,
+            &mut output,
+        )?;
+        Ok(output)
+    }
+
+    pub(crate) fn substitute_y_affine_truncated_fast_into(
+        &self,
+        prefix: &Polynomial<F>,
+        tail_degree: usize,
+        coefficient_count: usize,
+        scratch: &mut PolynomialProductScratch<F>,
+        output: &mut Self,
+    ) -> Result<(), ProductError>
+    where
+        F: ButterflyKernels,
+    {
         let Some(y_degree) = self.y_degree() else {
-            return Ok(Self::zero());
+            output.prepare_y_rows(0)?;
+            return Ok(());
         };
         if coefficient_count == 0 {
-            return Ok(Self::zero());
+            output.prepare_y_rows(0)?;
+            return Ok(());
         }
         let power_count = y_degree
             .checked_add(1)
             .ok_or(ConfigError::GeometryOverflow {
                 context: "fast affine substitution powers",
             })?;
-        let mut prefix_powers = Vec::new();
-        prefix_powers.try_reserve_exact(power_count).map_err(|_| {
-            ConfigError::AllocationFailed {
-                context: "fast affine substitution powers",
-                elements: power_count,
-                element_size: core::mem::size_of::<Polynomial<F>>(),
+        let mut prefix_powers = core::mem::take(&mut scratch.affine_powers);
+        let mut products = core::mem::take(&mut scratch.affine_products);
+        let mut pair_indices = core::mem::take(&mut scratch.affine_pairs);
+        let result = (|| {
+            if prefix_powers.capacity() < power_count {
+                prefix_powers
+                    .try_reserve_exact(power_count - prefix_powers.len())
+                    .map_err(|_| ConfigError::AllocationFailed {
+                        context: "fast affine substitution powers",
+                        elements: power_count,
+                        element_size: core::mem::size_of::<Polynomial<F>>(),
+                    })?;
             }
-        })?;
-        prefix_powers.push(Polynomial::one()?);
-        for exponent in 1..power_count {
-            prefix_powers
-                .push(prefix_powers[exponent - 1].multiply_truncated(prefix, coefficient_count)?);
-        }
+            while prefix_powers.len() < power_count {
+                prefix_powers.push(Polynomial::zero());
+            }
+            prefix_powers.truncate(power_count);
+            prefix_powers[0].assign_coefficients(&[F::Elem::ONE])?;
+            for exponent in 1..power_count {
+                let (previous, current) = prefix_powers.split_at_mut(exponent);
+                previous[exponent - 1].multiply_truncated_into(
+                    prefix,
+                    coefficient_count,
+                    &mut current[0],
+                )?;
+            }
 
-        let pair_capacity =
-            power_count
-                .checked_mul(power_count)
-                .ok_or(ConfigError::GeometryOverflow {
-                    context: "fast affine substitution product count",
-                })?;
-        let mut pairs = Vec::new();
-        let mut metadata = Vec::new();
-        pairs
-            .try_reserve_exact(pair_capacity)
-            .map_err(|_| ConfigError::AllocationFailed {
-                context: "fast affine substitution products",
-                elements: pair_capacity,
-                element_size: core::mem::size_of::<(&Polynomial<F>, &Polynomial<F>)>(),
-            })?;
-        metadata
-            .try_reserve_exact(pair_capacity)
-            .map_err(|_| ConfigError::AllocationFailed {
-                context: "fast affine substitution metadata",
-                elements: pair_capacity,
-                element_size: core::mem::size_of::<(usize, usize)>(),
-            })?;
-        for (source_y, coefficient) in self.y_coefficients.iter().enumerate() {
-            for target_y in 0..=source_y {
-                if !binomial_odd(source_y, target_y) {
-                    continue;
-                }
+            if pair_indices.capacity() < power_count {
+                pair_indices
+                    .try_reserve_exact(power_count - pair_indices.len())
+                    .map_err(|_| ConfigError::AllocationFailed {
+                        context: "fast affine substitution descriptors",
+                        elements: power_count,
+                        element_size: core::mem::size_of::<(usize, usize)>(),
+                    })?;
+            }
+            output.prepare_y_rows(power_count)?;
+            for row in &mut output.y_coefficients {
+                row.set_zero();
+            }
+
+            for target_y in 0..power_count {
                 let Some(shift) = tail_degree.checked_mul(target_y) else {
                     continue;
                 };
                 if shift >= coefficient_count {
                     continue;
                 }
-                pairs.push((coefficient, &prefix_powers[source_y - target_y]));
-                metadata.push((target_y, shift));
+                pair_indices.clear();
+                for source_y in target_y..self.y_coefficient_count() {
+                    if binomial_odd(source_y, target_y) {
+                        pair_indices.push((source_y, source_y - target_y));
+                    }
+                }
+                multiply_batch_truncated_with(
+                    pair_indices.len(),
+                    |index| {
+                        let (source_y, exponent) = pair_indices[index];
+                        (&self.y_coefficients[source_y], &prefix_powers[exponent])
+                    },
+                    coefficient_count - shift,
+                    ProductStrategy::Auto,
+                    scratch,
+                    &mut products,
+                )?;
+                for product in &products {
+                    if !product.is_zero() {
+                        output.y_coefficients[target_y].add_scaled_shifted_assign(
+                            F::Elem::ONE,
+                            product,
+                            shift,
+                        )?;
+                    }
+                }
             }
-        }
-
-        let mut products = Vec::new();
-        multiply_batch_truncated(
-            &pairs,
-            coefficient_count,
-            ProductStrategy::Auto,
-            scratch,
-            &mut products,
-        )?;
-        let mut output = Vec::new();
-        output
-            .try_reserve_exact(power_count)
-            .map_err(|_| ConfigError::AllocationFailed {
-                context: "fast affine substitution rows",
-                elements: power_count,
-                element_size: core::mem::size_of::<Polynomial<F>>(),
-            })?;
-        output.resize_with(power_count, Polynomial::zero);
-        for (mut product, (target_y, shift)) in products.into_iter().zip(metadata) {
-            product.truncate(coefficient_count - shift);
-            if !product.is_zero() {
-                output[target_y].add_assign(&product.shifted(shift)?)?;
-            }
-        }
-        Ok(Self::from_y_coefficients(output))
+            output.normalize();
+            Ok(())
+        })();
+        scratch.affine_powers = prefix_powers;
+        scratch.affine_products = products;
+        scratch.affine_pairs = pair_indices;
+        result
     }
 
     /// Return a copy with every `X` coefficient row reduced modulo
@@ -482,20 +524,6 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
         Ok(result)
     }
 
-    pub(crate) fn add_scaled_x_shifted_assign(
-        &mut self,
-        scale: F::Elem,
-        other: &Self,
-        x_shift: usize,
-    ) -> Result<(), ConfigError> {
-        self.prepare_y_rows(self.y_coefficient_count().max(other.y_coefficient_count()))?;
-        for (target, source) in self.y_coefficients.iter_mut().zip(&other.y_coefficients) {
-            target.add_scaled_shifted_assign(scale, source, x_shift)?;
-        }
-        self.normalize();
-        Ok(())
-    }
-
     /// Whether `Y + candidate(X)` is a factor of this polynomial.
     pub fn has_root(&self, candidate: &Polynomial<F>) -> Result<bool, ConfigError> {
         Ok(self.compose_y(candidate)?.is_zero())
@@ -503,6 +531,133 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
 
     pub(crate) fn normalize(&mut self) {
         normalize_y_coefficients(&mut self.y_coefficients);
+    }
+
+    /// Ensure exactly `count` zeroed `Y` rows, recycling spare rows through a
+    /// pool so warmed reuse performs no per-row allocation.
+    pub(crate) fn resize_and_zero_rows(
+        &mut self,
+        count: usize,
+        pool: &mut Vec<Polynomial<F>>,
+    ) -> Result<(), ConfigError> {
+        while self.y_coefficients.len() > count {
+            let mut row = self.y_coefficients.pop().expect("nonempty rows");
+            row.set_zero();
+            pool.push(row);
+        }
+        if count > self.y_coefficients.len() {
+            self.y_coefficients
+                .try_reserve(count - self.y_coefficients.len())
+                .map_err(|_| ConfigError::AllocationFailed {
+                    context: "bivariate Y coefficients",
+                    elements: count,
+                    element_size: core::mem::size_of::<Polynomial<F>>(),
+                })?;
+            while self.y_coefficients.len() < count {
+                self.y_coefficients.push(pool.pop().unwrap_or_default());
+            }
+        }
+        for row in &mut self.y_coefficients {
+            row.set_zero();
+        }
+        Ok(())
+    }
+
+    /// Drop trailing zero rows into the pool, restoring the normalized invariant
+    /// without freeing row buffers.
+    pub(crate) fn normalize_pooled(&mut self, pool: &mut Vec<Polynomial<F>>) {
+        while self.y_coefficients.last().is_some_and(Polynomial::is_zero) {
+            let mut row = self.y_coefficients.pop().expect("nonempty rows");
+            row.set_zero();
+            pool.push(row);
+        }
+    }
+
+    /// Substitute `Y = constant + X*Z` into reusable, pool-backed storage.
+    pub(crate) fn substitute_y_linear_into(
+        &self,
+        constant: F::Elem,
+        powers: &mut Vec<F::Elem>,
+        pool: &mut Vec<Polynomial<F>>,
+        out: &mut Self,
+    ) -> Result<(), ConfigError> {
+        let Some(y_degree) = self.y_degree() else {
+            out.resize_and_zero_rows(0, pool)?;
+            return Ok(());
+        };
+        let count = y_degree
+            .checked_add(1)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "bivariate substitution rows",
+            })?;
+        if powers.len() < count {
+            powers.try_reserve(count - powers.len()).map_err(|_| {
+                ConfigError::AllocationFailed {
+                    context: "bivariate substitution powers",
+                    elements: count,
+                    element_size: core::mem::size_of::<F::Elem>(),
+                }
+            })?;
+            powers.resize(count, F::Elem::ZERO);
+        }
+        powers[0] = F::Elem::ONE;
+        for exponent in 1..count {
+            powers[exponent] = powers[exponent - 1].mul(constant);
+        }
+        out.resize_and_zero_rows(count, pool)?;
+        for (source_y, coefficient) in self.y_coefficients.iter().enumerate() {
+            if coefficient.is_zero() {
+                continue;
+            }
+            for target_y in 0..=source_y {
+                if !binomial_odd(source_y, target_y) {
+                    continue;
+                }
+                let scale = powers[source_y - target_y];
+                if scale.is_zero() {
+                    continue;
+                }
+                out.y_coefficients[target_y].add_scaled_shifted_assign(
+                    scale,
+                    coefficient,
+                    target_y,
+                )?;
+            }
+        }
+        out.normalize_pooled(pool);
+        Ok(())
+    }
+
+    /// Divide every coefficient row exactly by `X^power` into pool-backed storage.
+    pub(crate) fn divide_by_x_power_into(
+        &self,
+        power: usize,
+        pool: &mut Vec<Polynomial<F>>,
+        out: &mut Self,
+    ) -> Result<(), PolynomialError> {
+        out.resize_and_zero_rows(self.y_coefficients.len(), pool)?;
+        for (row, coefficient) in out.y_coefficients.iter_mut().zip(&self.y_coefficients) {
+            coefficient.divide_by_x_power_into(power, row)?;
+        }
+        out.normalize_pooled(pool);
+        Ok(())
+    }
+
+    /// Evaluate `Q(X, candidate(X))` into reusable storage using `product` as
+    /// multiplication scratch, returning whether the composition is zero.
+    pub(crate) fn has_root_with(
+        &self,
+        candidate: &Polynomial<F>,
+        accumulator: &mut Polynomial<F>,
+        product: &mut Polynomial<F>,
+    ) -> Result<bool, ConfigError> {
+        accumulator.set_zero();
+        for coefficient in self.y_coefficients.iter().rev() {
+            accumulator.multiply_into(candidate, product)?;
+            core::mem::swap(accumulator, product);
+            accumulator.add_assign(coefficient)?;
+        }
+        Ok(accumulator.is_zero())
     }
 }
 

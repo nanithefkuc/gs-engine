@@ -1,4 +1,4 @@
-use fff::{Gf8, Gf16};
+use fgf::{Gf8, Gf16};
 use gs_engine::params::{interpolation_constraints, interpolation_monomials};
 use gs_engine::{ConfigError, GsParameters, ParameterLimits};
 

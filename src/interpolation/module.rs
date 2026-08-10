@@ -1,11 +1,15 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
-use fff::field::Elem;
-use fff::kernel::FieldKernels;
+use fgf::field::Elem;
+use fgf::kernel::FieldKernels;
+use fgf::ops;
+use gfm::{PopovLeadingTerm, WeakPopovBasis, WeakPopovScratch, weak_popov_basis_with_scratch};
 
 use crate::{BivariatePolynomial, ConfigError, GsParameters, Polynomial};
 
-use super::{InterpolationError, binomial_odd, validate_inputs, validate_result};
+use super::{
+    InterpolationError, InterpolationPlan, binomial_odd, validate_inputs, validate_result,
+};
 
 /// Conservative measured crossover in code length for the weak-Popov module backend.
 ///
@@ -13,211 +17,664 @@ use super::{InterpolationError, binomial_odd, validate_inputs, validate_result};
 /// scalar/GFNI. Kötter remains marginally faster for scalar GF16 at length four.
 pub const MODULE_INTERPOLATION_CROSSOVER: usize = 8;
 
+/// Reusable received-interpolant, power, packed-basis, and reduction storage for
+/// the weak-Popov module interpolation backend.
+pub struct ModuleScratch<F: FieldKernels> {
+    received: Polynomial<F>,
+    received_powers: Vec<Polynomial<F>>,
+    product: Polynomial<F>,
+    basis: ModuleSlab<F>,
+    reduction: WeakPopovScratch,
+    /// Packed received evaluations for the inverse-transform path.
+    transform_rows: Vec<u8>,
+    /// Novel-to-monomial conversion scratch for the inverse-transform path.
+    conversion: Vec<u8>,
+}
+
+struct ModuleSlab<F: FieldKernels> {
+    coefficients: Vec<u8>,
+    degrees: Vec<Option<usize>>,
+    leading: Vec<Option<PopovLeadingTerm>>,
+    rows: usize,
+    columns: usize,
+    x_capacity: usize,
+    field: core::marker::PhantomData<F>,
+}
+
+impl<F: FieldKernels> ModuleSlab<F> {
+    const fn new() -> Self {
+        Self {
+            coefficients: Vec::new(),
+            degrees: Vec::new(),
+            leading: Vec::new(),
+            rows: 0,
+            columns: 0,
+            x_capacity: 0,
+            field: core::marker::PhantomData,
+        }
+    }
+
+    fn prepare(&mut self, parameters: GsParameters) -> Result<(), ConfigError> {
+        let rows = parameters
+            .y_degree()
+            .checked_add(1)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "interpolation module row count",
+            })?;
+        // A weak-Popov update cannot increase a row's shifted leading degree:
+        // every shifted pivot term is bounded by the target leading term it
+        // cancels. The largest initial shifted degree is therefore a bound on
+        // every X degree reached during reduction.
+        let code_length = parameters.code_length();
+        let multiplicity = parameters.multiplicity();
+        let y_degree = parameters.y_degree();
+        let max_degree = parameters.max_degree();
+        let low_row_bound =
+            code_length
+                .checked_mul(multiplicity)
+                .ok_or(ConfigError::GeometryOverflow {
+                    context: "interpolation module low-row X capacity",
+                })?;
+        let high_row_bound = code_length
+            .checked_sub(1)
+            .and_then(|degree| degree.checked_mul(multiplicity))
+            .and_then(|base| {
+                y_degree
+                    .checked_sub(multiplicity)
+                    .and_then(|tail| tail.checked_mul(max_degree))
+                    .and_then(|tail| base.checked_add(tail))
+            })
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "interpolation module high-row X capacity",
+            })?;
+        let x_capacity = low_row_bound.max(high_row_bound).checked_add(1).ok_or(
+            ConfigError::GeometryOverflow {
+                context: "interpolation module X capacity",
+            },
+        )?;
+        let columns = rows;
+        let column_count = rows
+            .checked_mul(columns)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "interpolation module slab columns",
+            })?;
+        let coefficient_count =
+            column_count
+                .checked_mul(x_capacity)
+                .ok_or(ConfigError::GeometryOverflow {
+                    context: "interpolation module slab coefficients",
+                })?;
+        let byte_count =
+            coefficient_count
+                .checked_mul(F::BYTES)
+                .ok_or(ConfigError::GeometryOverflow {
+                    context: "interpolation module slab bytes",
+                })?;
+
+        resize_zeroed(
+            &mut self.coefficients,
+            byte_count,
+            "interpolation module coefficient slab",
+        )?;
+        resize_zeroed(
+            &mut self.degrees,
+            column_count,
+            "interpolation module degree metadata",
+        )?;
+        resize_zeroed(
+            &mut self.leading,
+            rows,
+            "interpolation module leading metadata",
+        )?;
+        self.coefficients.fill(0);
+        self.degrees.fill(None);
+        self.leading.fill(None);
+        self.rows = rows;
+        self.columns = columns;
+        self.x_capacity = x_capacity;
+        Ok(())
+    }
+
+    fn retained_bytes(&self) -> usize {
+        self.coefficients.capacity()
+            + self.degrees.capacity() * core::mem::size_of::<Option<usize>>()
+            + self.leading.capacity() * core::mem::size_of::<Option<PopovLeadingTerm>>()
+    }
+
+    fn column_index(&self, row: usize, column: usize) -> usize {
+        row * self.columns + column
+    }
+
+    fn column_byte_offset(&self, row: usize, column: usize) -> usize {
+        self.column_index(row, column) * self.x_capacity * F::BYTES
+    }
+
+    fn set_column(
+        &mut self,
+        row: usize,
+        column: usize,
+        polynomial: &Polynomial<F>,
+    ) -> Result<(), ConfigError> {
+        if polynomial.coefficient_count() > self.x_capacity {
+            return Err(ConfigError::ResourceLimitExceeded {
+                resource: "interpolation module X coefficients",
+                required: polynomial.coefficient_count(),
+                limit: self.x_capacity,
+            });
+        }
+        let start = self.column_byte_offset(row, column);
+        let source = polynomial.as_packed();
+        self.coefficients[start..start + source.len()].copy_from_slice(source);
+        let index = self.column_index(row, column);
+        self.degrees[index] = polynomial.degree();
+        Ok(())
+    }
+
+    fn recompute_leading(
+        &mut self,
+        row: usize,
+        shifts: &[usize],
+    ) -> Result<(), InterpolationError> {
+        let mut leading = None;
+        for (column, &shift) in shifts.iter().enumerate() {
+            let Some(degree) = self.degrees[self.column_index(row, column)] else {
+                continue;
+            };
+            let shifted_degree = degree
+                .checked_add(shift)
+                .ok_or(gfm::ReduceError::DegreeOverflow { degree, shift })?;
+            let candidate = PopovLeadingTerm {
+                degree,
+                column,
+                shifted_degree,
+            };
+            if leading.is_none_or(|current: PopovLeadingTerm| {
+                (candidate.shifted_degree, candidate.column)
+                    > (current.shifted_degree, current.column)
+            }) {
+                leading = Some(candidate);
+            }
+        }
+        self.leading[row] = leading;
+        Ok(())
+    }
+
+    fn recompute_degree(&mut self, row: usize, column: usize, maximum: usize) {
+        let start = self.column_byte_offset(row, column);
+        let bytes = &self.coefficients[start..start + self.x_capacity * F::BYTES];
+        let degree = (0..maximum).rev().find(|&degree| {
+            let offset = degree * F::BYTES;
+            !F::read(&bytes[offset..offset + F::BYTES]).is_zero()
+        });
+        let index = self.column_index(row, column);
+        self.degrees[index] = degree;
+    }
+
+    fn materialize(
+        &self,
+        row: usize,
+        output: &mut BivariatePolynomial<F>,
+    ) -> Result<(), ConfigError> {
+        output.prepare_y_rows(self.columns)?;
+        for column in 0..self.columns {
+            let target = output.y_coefficient_mut(column);
+            let Some(degree) = self.degrees[self.column_index(row, column)] else {
+                target.set_zero();
+                continue;
+            };
+            let byte_count = (degree + 1) * F::BYTES;
+            let start = self.column_byte_offset(row, column);
+            target.assign_packed(&self.coefficients[start..start + byte_count])?;
+        }
+        output.normalize();
+        Ok(())
+    }
+}
+
+impl<F: FieldKernels> ModuleScratch<F> {
+    /// Construct empty reusable module-interpolation scratch.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            received: Polynomial::zero(),
+            received_powers: Vec::new(),
+            product: Polynomial::zero(),
+            basis: ModuleSlab::new(),
+            reduction: WeakPopovScratch::new(),
+            transform_rows: Vec::new(),
+            conversion: Vec::new(),
+        }
+    }
+
+    /// Retained packed-basis, metadata, power, and reduction capacity in bytes.
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.basis.retained_bytes()
+            + self.received.retained_capacity_bytes()
+            + self.product.retained_capacity_bytes()
+            + self
+                .received_powers
+                .iter()
+                .map(Polynomial::retained_capacity_bytes)
+                .sum::<usize>()
+            + self.received_powers.capacity() * core::mem::size_of::<Polynomial<F>>()
+            + self.reduction.capacity() * core::mem::size_of::<Option<usize>>()
+            + self.transform_rows.capacity()
+            + self.conversion.capacity()
+    }
+
+    /// Pre-size the transform scratch buffers for a domain of `size` points.
+    pub(crate) fn reserve_transform(&mut self, size: usize) -> Result<(), ConfigError> {
+        use butterfly_fft::basis::conversion_scratch_elements;
+
+        let row_len = F::BYTES;
+        let evaluation_bytes = size
+            .checked_mul(row_len)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "transform interpolation rows",
+            })?;
+        let conversion_bytes = conversion_scratch_elements(size)
+            .checked_mul(row_len)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "transform interpolation conversion",
+            })?;
+        resize_zeroed(
+            &mut self.transform_rows,
+            evaluation_bytes,
+            "transform received rows",
+        )?;
+        resize_zeroed(
+            &mut self.conversion,
+            conversion_bytes,
+            "transform received conversion",
+        )?;
+        Ok(())
+    }
+}
+
+impl<F: FieldKernels> Default for ModuleScratch<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Construct an interpolation polynomial by reducing the Guruswami–Sudan
 /// interpolation module to weak Popov form.
-pub fn interpolate_module<F: FieldKernels>(
+pub fn interpolate_module<F: butterfly_fft::core::kernel::ButterflyKernels>(
     parameters: GsParameters,
     points: &[F::Elem],
     values: &[F::Elem],
 ) -> Result<BivariatePolynomial<F>, InterpolationError> {
-    validate_inputs(parameters, points, values)?;
-    let (received, vanishing) = interpolate_received(points, values)?;
-    let multiplicity = parameters.multiplicity();
-    let y_degree = parameters.y_degree();
-    let received_powers = polynomial_powers(&received, multiplicity)?;
-    let vanishing_powers = polynomial_powers(&vanishing, multiplicity)?;
-
-    let row_count = y_degree
-        .checked_add(1)
-        .ok_or(ConfigError::GeometryOverflow {
-            context: "interpolation module row count",
-        })?;
-    let mut basis = Vec::new();
-    basis
-        .try_reserve_exact(row_count)
-        .map_err(|_| ConfigError::AllocationFailed {
-            context: "interpolation module basis",
-            elements: row_count,
-            element_size: core::mem::size_of::<BivariatePolynomial<F>>(),
-        })?;
-    for row in 0..row_count {
-        basis.push(module_row(
-            row,
-            multiplicity,
-            y_degree,
-            &received_powers,
-            &vanishing_powers,
-        )?);
-    }
-
-    reduce_to_weak_popov(&mut basis, parameters.max_degree())?;
-    let mut selected = None;
-    for polynomial in basis {
-        let Some(degree) = polynomial.weighted_degree(parameters.max_degree())? else {
-            continue;
-        };
-        if degree > parameters.weighted_degree() {
-            continue;
-        }
-        let key = (degree, polynomial.y_degree().unwrap_or(0));
-        if selected
-            .as_ref()
-            .is_none_or(|(selected_key, _)| key < *selected_key)
-        {
-            selected = Some((key, polynomial));
-        }
-    }
-    let selected =
-        selected
-            .map(|(_, polynomial)| polynomial)
-            .ok_or(InterpolationError::InvalidResult {
-                reason: "reduced interpolation module has no row within the weighted-degree bound",
-            })?;
-    validate_result(parameters, points, values, &selected)?;
-    Ok(selected)
+    let plan = InterpolationPlan::new(parameters, points)?;
+    let mut scratch = ModuleScratch::new();
+    let mut output = BivariatePolynomial::zero();
+    interpolate_module_into(
+        parameters,
+        points,
+        values,
+        &plan,
+        None,
+        &mut scratch,
+        &mut output,
+    )?;
+    Ok(output)
 }
 
-fn interpolate_received<F: FieldKernels>(
+/// Reduce the interpolation module into reusable `output` storage, recycling the
+/// packed basis and `R` powers held by `scratch` and the plan-owned invariants.
+///
+/// When `domain` is `Some` and the plan selected the transform strategy, the
+/// received word is interpolated by an inverse `butterfly-fft` transform plus
+/// novel-to-monomial conversion (`O(n log n)`) instead of incremental Newton
+/// interpolation (`O(n²)`).
+pub fn interpolate_module_into<F: butterfly_fft::core::kernel::ButterflyKernels>(
+    parameters: GsParameters,
     points: &[F::Elem],
     values: &[F::Elem],
-) -> Result<(Polynomial<F>, Polynomial<F>), InterpolationError> {
-    let mut received = Polynomial::<F>::zero();
-    let mut vanishing = Polynomial::<F>::one()?;
-    for (&point, &value) in points.iter().zip(values) {
-        let denominator = vanishing.evaluate(point);
-        if denominator.is_zero() {
-            return Err(InterpolationError::InvalidResult {
-                reason: "validated interpolation points became singular",
-            });
+    plan: &InterpolationPlan<F>,
+    domain: Option<&crate::domain::EvaluationDomain<F>>,
+    scratch: &mut ModuleScratch<F>,
+    output: &mut BivariatePolynomial<F>,
+) -> Result<(), InterpolationError> {
+    validate_inputs(parameters, points, values)?;
+    match (plan.strategy, domain) {
+        (crate::interpolation::plan::DomainStrategy::Transform, Some(domain)) => {
+            interpolate_received_transform::<F>(
+                domain,
+                values,
+                &mut scratch.transform_rows,
+                &mut scratch.conversion,
+                &mut scratch.received,
+            )?;
         }
-        let discrepancy = value.add(received.evaluate(point));
-        received.add_scaled_assign(discrepancy.mul(denominator.inv()), &vanishing)?;
-        vanishing = vanishing.multiply_x_plus(point)?;
+        _ => {
+            interpolate_received_into(
+                points,
+                values,
+                &plan.newton_partials,
+                &plan.newton_denominators,
+                &mut scratch.received,
+            )?;
+        }
     }
-    Ok((received, vanishing))
+    let multiplicity = parameters.multiplicity();
+    fill_polynomial_powers(
+        &scratch.received,
+        multiplicity,
+        &mut scratch.received_powers,
+    )?;
+
+    scratch.basis.prepare(parameters)?;
+    for row in 0..scratch.basis.rows {
+        module_row_into(
+            row,
+            multiplicity,
+            &scratch.received_powers,
+            &plan.vanishing_powers,
+            &mut scratch.product,
+            &mut scratch.basis,
+        )?;
+        scratch.basis.recompute_leading(row, &plan.column_shifts)?;
+    }
+
+    weak_popov_basis_with_scratch::<F, _>(
+        &mut scratch.basis,
+        &plan.column_shifts,
+        &mut scratch.reduction,
+    )?;
+
+    let mut selected: Option<(usize, (usize, usize))> = None;
+    for (row, leading) in scratch.basis.leading.iter().copied().enumerate() {
+        let Some(leading) = leading else {
+            continue;
+        };
+        if leading.shifted_degree > parameters.weighted_degree() {
+            continue;
+        }
+        let key = (leading.shifted_degree, leading.column);
+        if selected.is_none_or(|(_, selected_key)| key < selected_key) {
+            selected = Some((row, key));
+        }
+    }
+    let row = selected
+        .map(|(row, _)| row)
+        .ok_or(InterpolationError::InvalidResult {
+            reason: "reduced interpolation module has no row within the weighted-degree bound",
+        })?;
+    scratch.basis.materialize(row, output)?;
+    validate_result(parameters, points, values, output)?;
+    Ok(())
 }
 
-fn polynomial_powers<F: FieldKernels>(
+/// Interpolate a received word through the inverse `butterfly-fft` transform.
+///
+/// Packs received values into byte rows, executes the inverse transform and
+/// novel-to-monomial conversion in place, then reads the monomial coefficients
+/// back into the `received` polynomial. Allocation-free once `transform_rows`
+/// and `conversion` are sized for the domain.
+fn interpolate_received_transform<F: butterfly_fft::core::kernel::ButterflyKernels>(
+    domain: &crate::domain::EvaluationDomain<F>,
+    values: &[F::Elem],
+    transform_rows: &mut Vec<u8>,
+    conversion: &mut Vec<u8>,
+    received: &mut Polynomial<F>,
+) -> Result<(), InterpolationError> {
+    use butterfly_fft::basis::{conversion_scratch_elements, inverse_interpolate_bytes};
+
+    let plan = domain
+        .transform_plan()
+        .ok_or(InterpolationError::InvalidResult {
+            reason: "transform strategy selected without a transform plan",
+        })?;
+    let size = plan.size();
+    debug_assert_eq!(size, values.len());
+
+    let row_len = F::BYTES;
+    let evaluation_bytes = size
+        .checked_mul(row_len)
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "transform received interpolation bytes",
+        })?;
+    let conversion_bytes = conversion_scratch_elements(size)
+        .checked_mul(row_len)
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "transform received conversion bytes",
+        })?;
+    resize_zeroed(transform_rows, evaluation_bytes, "transform received rows")?;
+    resize_zeroed(
+        conversion,
+        conversion_bytes,
+        "transform received conversion",
+    )?;
+
+    for (point, &value) in values.iter().enumerate() {
+        let start = point * row_len;
+        F::write(&mut transform_rows[start..start + row_len], value);
+    }
+
+    inverse_interpolate_bytes::<F>(
+        &mut transform_rows[..evaluation_bytes],
+        row_len,
+        plan,
+        &mut conversion[..conversion_bytes],
+    )
+    .map_err(InterpolationError::from)?;
+
+    // The transform output is already packed field elements in low-to-high
+    // monomial order, so assign_packed reuses it without an intermediate Vec.
+    received.assign_packed(&transform_rows[..evaluation_bytes])?;
+    Ok(())
+}
+
+fn interpolate_received_into<F: FieldKernels>(
+    points: &[F::Elem],
+    values: &[F::Elem],
+    newton_partials: &[Polynomial<F>],
+    newton_denominators: &[F::Elem],
+    received: &mut Polynomial<F>,
+) -> Result<(), InterpolationError> {
+    debug_assert_eq!(newton_partials.len(), points.len());
+    debug_assert_eq!(newton_denominators.len(), points.len());
+    received.set_zero();
+    for index in 0..points.len() {
+        let discrepancy = values[index].add(received.evaluate(points[index]));
+        let coefficient = discrepancy.mul(newton_denominators[index]);
+        received.add_scaled_assign(coefficient, &newton_partials[index])?;
+    }
+    Ok(())
+}
+
+fn fill_polynomial_powers<F: FieldKernels>(
     polynomial: &Polynomial<F>,
     maximum: usize,
-) -> Result<Vec<Polynomial<F>>, ConfigError> {
+    powers: &mut Vec<Polynomial<F>>,
+) -> Result<(), ConfigError> {
     let count = maximum
         .checked_add(1)
         .ok_or(ConfigError::GeometryOverflow {
             context: "interpolation module power count",
         })?;
-    let mut powers = Vec::new();
-    powers
-        .try_reserve_exact(count)
-        .map_err(|_| ConfigError::AllocationFailed {
-            context: "interpolation module powers",
-            elements: count,
-            element_size: core::mem::size_of::<Polynomial<F>>(),
-        })?;
-    powers.push(Polynomial::one()?);
-    for exponent in 1..=maximum {
-        powers.push(powers[exponent - 1].multiply(polynomial)?);
+    if powers.capacity() < count {
+        powers
+            .try_reserve(count - powers.len())
+            .map_err(|_| ConfigError::AllocationFailed {
+                context: "interpolation module powers",
+                elements: count,
+                element_size: core::mem::size_of::<Polynomial<F>>(),
+            })?;
     }
-    Ok(powers)
+    while powers.len() < count {
+        powers.push(Polynomial::zero());
+    }
+    powers[0].assign_coefficients(&[F::Elem::ONE])?;
+    for exponent in 1..=maximum {
+        let (previous, current) = powers.split_at_mut(exponent);
+        previous[exponent - 1].multiply_into(polynomial, &mut current[0])?;
+    }
+    Ok(())
 }
 
-fn module_row<F: FieldKernels>(
+fn module_row_into<F: FieldKernels>(
     row: usize,
     multiplicity: usize,
-    y_degree: usize,
     received_powers: &[Polynomial<F>],
     vanishing_powers: &[Polynomial<F>],
-) -> Result<BivariatePolynomial<F>, ConfigError> {
-    let mut coefficients = vec![Polynomial::zero(); y_degree + 1];
+    product: &mut Polynomial<F>,
+    basis: &mut ModuleSlab<F>,
+) -> Result<(), ConfigError> {
     if row < multiplicity {
         let vanishing = &vanishing_powers[multiplicity - row];
         for y in 0..=row {
             if binomial_odd(row, y) {
-                coefficients[y] = received_powers[row - y].multiply(vanishing)?;
+                received_powers[row - y].multiply_into(vanishing, product)?;
+                basis.set_column(row, y, product)?;
             }
         }
     } else {
         let shift = row - multiplicity;
         for y in 0..=multiplicity {
             if binomial_odd(multiplicity, y) {
-                coefficients[shift + y] = received_powers[multiplicity - y].clone();
+                basis.set_column(row, shift + y, &received_powers[multiplicity - y])?;
             }
         }
     }
-    Ok(BivariatePolynomial::from_y_coefficients(coefficients))
+    Ok(())
 }
 
-fn reduce_to_weak_popov<F: FieldKernels>(
-    basis: &mut [BivariatePolynomial<F>],
-    y_weight: usize,
-) -> Result<(), InterpolationError> {
-    let mut leading_rows = vec![None; basis.len()];
-    loop {
-        leading_rows.fill(None);
-        let mut collision = None;
-        for (row, polynomial) in basis.iter().enumerate() {
-            let Some(leading) = polynomial.weighted_leading_term(y_weight)? else {
+impl<F: FieldKernels> WeakPopovBasis<F> for ModuleSlab<F> {
+    type Error = InterpolationError;
+
+    fn row_count(&self) -> usize {
+        self.rows
+    }
+
+    fn column_count(&self, _row: usize) -> usize {
+        self.columns
+    }
+
+    fn degree(&self, row: usize, column: usize) -> Option<usize> {
+        self.degrees[self.column_index(row, column)]
+    }
+
+    fn coefficient(&self, row: usize, column: usize, degree: usize) -> F::Elem {
+        if degree >= self.x_capacity {
+            return F::Elem::ZERO;
+        }
+        let start = self.column_byte_offset(row, column) + degree * F::BYTES;
+        F::read(&self.coefficients[start..start + F::BYTES])
+    }
+
+    fn leading_term(
+        &self,
+        row: usize,
+        _shifts: &[usize],
+    ) -> Result<Option<PopovLeadingTerm>, Self::Error> {
+        Ok(self.leading[row])
+    }
+
+    fn add_scaled_shifted_assign(
+        &mut self,
+        target: usize,
+        pivot: usize,
+        scale: F::Elem,
+        shift: usize,
+        shifts: &[usize],
+    ) -> Result<(), Self::Error> {
+        let row_bytes = self.columns * self.x_capacity * F::BYTES;
+        let column_bytes = self.x_capacity * F::BYTES;
+        for column in 0..self.columns {
+            let target_count = self.degree(target, column).map_or(0, |degree| degree + 1);
+            let pivot_count = self
+                .degree(pivot, column)
+                .and_then(|degree| degree.checked_add(shift))
+                .map_or(0, |degree| degree + 1);
+            let required = target_count.max(pivot_count);
+            if required > self.x_capacity {
+                return Err(ConfigError::ResourceLimitExceeded {
+                    resource: "interpolation module X coefficients",
+                    required,
+                    limit: self.x_capacity,
+                }
+                .into());
+            }
+        }
+
+        let prepared_scale = ops::Coeff::<F>::new(scale);
+
+        {
+            let degrees = &self.degrees;
+            let columns = self.columns;
+            let (target_row, pivot_row) = if target < pivot {
+                let (lower, upper) = self.coefficients.split_at_mut(pivot * row_bytes);
+                (
+                    &mut lower[target * row_bytes..(target + 1) * row_bytes],
+                    &upper[..row_bytes],
+                )
+            } else {
+                let (lower, upper) = self.coefficients.split_at_mut(target * row_bytes);
+                (
+                    &mut upper[..row_bytes],
+                    &lower[pivot * row_bytes..(pivot + 1) * row_bytes],
+                )
+            };
+            for column in 0..columns {
+                let Some(pivot_degree) = degrees[pivot * columns + column] else {
+                    continue;
+                };
+                let source_count = pivot_degree + 1;
+                let source_start = column * column_bytes;
+                let target_start = source_start + shift * F::BYTES;
+                ops::mul_add_with::<F>(
+                    &mut target_row[target_start..target_start + source_count * F::BYTES],
+                    &prepared_scale,
+                    &pivot_row[source_start..source_start + source_count * F::BYTES],
+                );
+            }
+        }
+
+        for column in 0..self.columns {
+            let target_degree = self.degree(target, column);
+            let Some(pivot_degree) = self.degree(pivot, column) else {
                 continue;
             };
-            if let Some(previous) = leading_rows[leading.y_degree] {
-                collision = Some((previous, row));
-                break;
+            let shifted_pivot_degree =
+                pivot_degree
+                    .checked_add(shift)
+                    .ok_or(ConfigError::GeometryOverflow {
+                        context: "interpolation module shifted pivot degree",
+                    })?;
+            if target_degree != Some(shifted_pivot_degree) {
+                let degree = target_degree.map_or(shifted_pivot_degree, |degree| {
+                    degree.max(shifted_pivot_degree)
+                });
+                let index = self.column_index(target, column);
+                self.degrees[index] = Some(degree);
+                continue;
             }
-            leading_rows[leading.y_degree] = Some(row);
+
+            let start = self.column_byte_offset(target, column) + shifted_pivot_degree * F::BYTES;
+            if F::read(&self.coefficients[start..start + F::BYTES]).is_zero() {
+                self.recompute_degree(target, column, shifted_pivot_degree);
+            }
         }
-        let Some((left, right)) = collision else {
-            return Ok(());
-        };
-        reduce_pair(basis, left, right, y_weight)?;
+        self.recompute_leading(target, shifts)
     }
 }
 
-fn reduce_pair<F: FieldKernels>(
-    basis: &mut [BivariatePolynomial<F>],
-    left: usize,
-    right: usize,
-    y_weight: usize,
-) -> Result<(), InterpolationError> {
-    let left_leading =
-        basis[left]
-            .weighted_leading_term(y_weight)?
-            .ok_or(InterpolationError::InvalidResult {
-                reason: "interpolation module reduction selected a zero row",
+fn resize_zeroed<T: Clone + Default>(
+    values: &mut Vec<T>,
+    required: usize,
+    context: &'static str,
+) -> Result<(), ConfigError> {
+    if values.capacity() < required {
+        values
+            .try_reserve_exact(required - values.len())
+            .map_err(|_| ConfigError::AllocationFailed {
+                context,
+                elements: required,
+                element_size: core::mem::size_of::<T>(),
             })?;
-    let right_leading =
-        basis[right]
-            .weighted_leading_term(y_weight)?
-            .ok_or(InterpolationError::InvalidResult {
-                reason: "interpolation module reduction selected a zero row",
-            })?;
-    let (target, pivot, target_leading, pivot_leading) =
-        if left_leading.x_degree >= right_leading.x_degree {
-            (left, right, left_leading, right_leading)
-        } else {
-            (right, left, right_leading, left_leading)
-        };
-    let target_coefficient = basis[target]
-        .y_coefficient(target_leading.y_degree)
-        .ok_or(InterpolationError::InvalidResult {
-            reason: "interpolation module leading row disappeared",
-        })?
-        .coefficient(target_leading.x_degree);
-    let pivot_coefficient = basis[pivot]
-        .y_coefficient(pivot_leading.y_degree)
-        .ok_or(InterpolationError::InvalidResult {
-            reason: "interpolation module leading row disappeared",
-        })?
-        .coefficient(pivot_leading.x_degree);
-    let scale = target_coefficient.mul(pivot_coefficient.inv());
-    let shift = target_leading.x_degree - pivot_leading.x_degree;
-    let (target_polynomial, pivot_polynomial) = if target < pivot {
-        let (lower, upper) = basis.split_at_mut(pivot);
-        (&mut lower[target], &upper[0])
-    } else {
-        let (lower, upper) = basis.split_at_mut(target);
-        (&mut upper[0], &lower[pivot])
-    };
-    target_polynomial
-        .add_scaled_x_shifted_assign(scale, pivot_polynomial, shift)
-        .map_err(InterpolationError::from)
+    }
+    values.resize(required, T::default());
+    Ok(())
 }
