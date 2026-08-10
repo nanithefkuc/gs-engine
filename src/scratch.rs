@@ -4,20 +4,15 @@ use butterfly_fft::basis::conversion_scratch_elements;
 use butterfly_fft::core::kernel::ButterflyKernels;
 
 use crate::geometry::checked_product;
-use crate::{
-    AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, ConfigError, GsParameters,
-    KoetterScratch, Polynomial,
-};
+use crate::interpolation::ModuleScratch;
+use crate::{AlekhnovichScratch, BivariatePolynomial, ConfigError, KoetterScratch, Polynomial};
 
 /// Caller-owned reusable workspaces used by end-to-end decoding.
 pub struct DecodeScratch<F: ButterflyKernels> {
     pub(crate) interpolation: KoetterScratch<F>,
+    pub(crate) module: ModuleScratch<F>,
     pub(crate) interpolation_output: BivariatePolynomial<F>,
-    pub(crate) cached_received: Vec<F::Elem>,
-    pub(crate) cached_interpolation_parameters: Option<GsParameters>,
     pub(crate) roots: AlekhnovichScratch<F>,
-    pub(crate) cached_root_input: Option<BivariatePolynomial<F>>,
-    pub(crate) cached_root_geometry: Option<(usize, AlekhnovichLimits)>,
     pub(crate) root_candidates: Vec<Polynomial<F>>,
     pub(crate) packed_evaluations: Vec<u8>,
     pub(crate) conversion: Vec<u8>,
@@ -30,12 +25,9 @@ impl<F: ButterflyKernels> DecodeScratch<F> {
     pub const fn new() -> Self {
         Self {
             interpolation: KoetterScratch::new(),
+            module: ModuleScratch::new(),
             interpolation_output: BivariatePolynomial::zero(),
-            cached_received: Vec::new(),
-            cached_interpolation_parameters: None,
             roots: AlekhnovichScratch::new(),
-            cached_root_input: None,
-            cached_root_geometry: None,
             root_candidates: Vec::new(),
             packed_evaluations: Vec::new(),
             conversion: Vec::new(),
@@ -53,6 +45,27 @@ impl<F: ButterflyKernels> DecodeScratch<F> {
     #[must_use]
     pub fn conversion_capacity_bytes(&self) -> usize {
         self.conversion.capacity()
+    }
+
+    /// Retained candidate-list capacity for extracted roots.
+    #[cfg(feature = "internals")]
+    #[must_use]
+    pub fn root_candidate_capacity(&self) -> usize {
+        self.root_candidates.capacity()
+    }
+
+    /// Retained divide-and-conquer and Roth–Ruckenstein extraction capacity.
+    #[cfg(feature = "internals")]
+    #[must_use]
+    pub fn root_extraction_capacity(&self) -> usize {
+        self.roots.capacity()
+    }
+
+    /// Retained module-interpolation basis and `R`-power capacity.
+    #[cfg(feature = "internals")]
+    #[must_use]
+    pub fn module_capacity(&self) -> usize {
+        self.module.capacity()
     }
 
     pub(crate) fn reserve_evaluation(
