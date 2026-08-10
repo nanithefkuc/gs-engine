@@ -1,5 +1,5 @@
 perf-record-version=1
-profile-seconds=1
+profile-seconds=5
 selected-backend=v3_gfni_crypto
 Linux Hoshi 7.1.6-arch1-1 #1 SMP PREEMPT_DYNAMIC Tue, 04 Aug 2026 11:19:27 +0000 x86_64 GNU/Linux
 rustc 1.93.0 (254b59607 2026-01-19)
@@ -25,7 +25,7 @@ Socket(s):                               1
 Stepping:                                1
 Microcode version:                       0x126
 Frequency boost:                         enabled
-CPU(s) scaling MHz:                      54%
+CPU(s) scaling MHz:                      24%
 CPU max MHz:                             4800.0000
 CPU min MHz:                             400.0000
 BogoMIPS:                                6604.80
@@ -56,8 +56,8 @@ Vulnerability Srbds:                     Not affected
 Vulnerability Tsa:                       Not affected
 Vulnerability Tsx async abort:           Not affected
 Vulnerability Vmscape:                   Mitigation; IBPB before exit to userspace
-c31a6215348f9724888e025b569ac57e723cbdc5
-cargo bench --all-features --bench decoder -- <filter> --profile-time 1
+a5fcbfdcedc44869b17f69ea1e8f3430ce6f5ad7
+cargo bench --all-features --bench decoder -- <filter> --profile-time 5
 tier=small;filter=warmed-changed-word/gf8/v3_gfni_crypto/additive/n4/k1
 tier=medium;filter=warmed-changed-word/gf16/v3_gfni_crypto/additive/n16/k4
 tier=large;filter=warmed-changed-word/gf16/v3_gfni_crypto/additive/n64/k16

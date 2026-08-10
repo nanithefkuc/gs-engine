@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use fgf::field::Elem;
 use fgf::{Gf8, Gf16};
 use gs_engine::{PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
@@ -17,6 +18,7 @@ struct ProductCase {
     precision: usize,
     batch: usize,
     shape: &'static str,
+    nonzero_stride: usize,
 }
 
 const PRODUCT_CASES: &[ProductCase] = &[
@@ -26,6 +28,7 @@ const PRODUCT_CASES: &[ProductCase] = &[
         precision: 15,
         batch: 1,
         shape: "balanced-full",
+        nonzero_stride: 1,
     },
     ProductCase {
         left: 32,
@@ -33,6 +36,7 @@ const PRODUCT_CASES: &[ProductCase] = &[
         precision: 35,
         batch: 4,
         shape: "unbalanced-full",
+        nonzero_stride: 1,
     },
     ProductCase {
         left: 128,
@@ -40,6 +44,7 @@ const PRODUCT_CASES: &[ProductCase] = &[
         precision: 32,
         batch: 8,
         shape: "unbalanced-truncated",
+        nonzero_stride: 1,
     },
     ProductCase {
         left: 96,
@@ -47,6 +52,7 @@ const PRODUCT_CASES: &[ProductCase] = &[
         precision: 40,
         batch: 16,
         shape: "balanced-truncated",
+        nonzero_stride: 1,
     },
     ProductCase {
         left: 512,
@@ -54,6 +60,7 @@ const PRODUCT_CASES: &[ProductCase] = &[
         precision: 128,
         batch: 4,
         shape: "unbalanced-truncated-large",
+        nonzero_stride: 1,
     },
     ProductCase {
         left: 1_024,
@@ -61,6 +68,23 @@ const PRODUCT_CASES: &[ProductCase] = &[
         precision: 640,
         batch: 1,
         shape: "unbalanced-half-large",
+        nonzero_stride: 1,
+    },
+    ProductCase {
+        left: 128,
+        right: 128,
+        precision: 32,
+        batch: 1,
+        shape: "balanced-sparse-truncated",
+        nonzero_stride: 8,
+    },
+    ProductCase {
+        left: 256,
+        right: 32,
+        precision: 64,
+        batch: 16,
+        shape: "unbalanced-sparse-batched",
+        nonzero_stride: 16,
     },
 ];
 
@@ -74,21 +98,42 @@ fn run_field<F: ButterflyKernels>(
             continue;
         }
         let left: Vec<_> = (0..case.batch)
-            .map(|lane| generated_polynomial::<F>(case.left, lane as u64 + 1))
+            .map(|lane| {
+                generated_sparse_polynomial::<F>(case.left, lane as u64 + 1, case.nonzero_stride)
+            })
             .collect();
         let right: Vec<_> = (0..case.batch)
-            .map(|lane| generated_polynomial::<F>(case.right, lane as u64 + 10_000))
+            .map(|lane| {
+                generated_sparse_polynomial::<F>(
+                    case.right,
+                    lane as u64 + 10_000,
+                    case.nonzero_stride,
+                )
+            })
             .collect();
         let pairs: Vec<_> = left.iter().zip(&right).collect();
-        let geometry = format!(
-            "{field}/{}/left{}/right{}/precision{}/batch{}/{}",
-            backend_name::<F>(),
-            case.left,
-            case.right,
-            case.precision,
-            case.batch,
-            case.shape
-        );
+        let geometry = if case.nonzero_stride == 1 {
+            format!(
+                "{field}/{}/left{}/right{}/precision{}/batch{}/{}",
+                backend_name::<F>(),
+                case.left,
+                case.right,
+                case.precision,
+                case.batch,
+                case.shape
+            )
+        } else {
+            format!(
+                "{field}/{}/left{}/right{}/precision{}/batch{}/stride{}/{}",
+                backend_name::<F>(),
+                case.left,
+                case.right,
+                case.precision,
+                case.batch,
+                case.nonzero_stride,
+                case.shape
+            )
+        };
         group.throughput(Throughput::Elements((case.precision * case.batch) as u64));
 
         for (name, strategy) in [
@@ -137,6 +182,22 @@ fn run_field<F: ButterflyKernels>(
             );
         }
     }
+}
+
+fn generated_sparse_polynomial<F: ButterflyKernels>(
+    count: usize,
+    seed: u64,
+    nonzero_stride: usize,
+) -> gs_engine::Polynomial<F> {
+    let mut polynomial = generated_polynomial::<F>(count, seed);
+    if nonzero_stride > 1 {
+        for degree in 0..count.saturating_sub(1) {
+            if !degree.is_multiple_of(nonzero_stride) {
+                polynomial.set_coefficient(degree, F::Elem::ZERO).unwrap();
+            }
+        }
+    }
+    polynomial
 }
 
 fn products(criterion: &mut Criterion) {

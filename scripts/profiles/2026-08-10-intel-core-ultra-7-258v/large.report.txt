@@ -3,119 +3,82 @@
 #
 # Total Lost Samples: 0
 #
-# Samples: 1K of event 'cpu_atom/cycles/Pu'
-# Event count (approx.): 4612717068
+# Samples: 5K of event 'cpu_atom/cycles/Pu'
+# Event count (approx.): 18182187281
 #
-# Children      Self  Command          Shared Object             Symbol                                                                                                                                                   
-# ........  ........  ...............  ........................  .........................................................................................................................................................
+# Children      Self  Command          Shared Object             Symbol
+# ........  ........  ...............  ........................  ..........................................................................................................................................................................................................................................................................................................................
 #
-    27.37%    27.37%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
-    25.38%    25.38%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
-    10.68%    10.68%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] alloc::raw_vec::RawVecInner<A>::finish_grow
-     5.00%     5.00%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
-     4.58%     4.58%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at
-     3.90%     3.90%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::pow_mod
-     3.73%     3.73%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
-     1.90%     1.90%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::module::interpolate_module
-     1.52%     1.52%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] fgf::kernel::x86::gf16::mul_add_gfni_impl
-     1.47%     1.47%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gfm::poly::weak_popov
-     1.27%     1.27%  decoder-b1bbad7  libc.so.6                 [.] cfree
-            |
-            ---__libc_free (inlined)
-
-     1.27%     0.00%  decoder-b1bbad7  libc.so.6                 [.] __libc_free (inlined)
-            |
-            ---__libc_free (inlined)
-
-     1.18%     1.18%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] core::ptr::drop_in_place<gs_engine::roots::roth_ruckenstein::Frame<fgf::field::gf16::Gf16>>
-     1.12%     1.12%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::gcd
-     1.03%     1.03%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::bivariate::BivariatePolynomial<F>::substitute_y_linear
+    45.88%    45.88%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
+    26.46%    26.46%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
+     5.30%     5.30%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at_raw
+     2.05%     2.05%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::module::interpolate_module_into
+     2.03%     2.03%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gfm::poly::weak_popov_basis_with_scratch
+     1.92%     1.92%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] fgf::kernel::x86::gf16::mul_add_gfni_impl
+     1.91%     1.91%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated_into
+     1.67%     1.67%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem_into
+     1.65%     1.65%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::validate_result
+     1.29%     1.29%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] fgf::kernel::gf16::mul_add_scalar
+     1.28%     1.26%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::base_field_roots_into
+     1.26%     1.26%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] <gs_engine::interpolation::module::ModuleSlab<F> as gfm::poly::WeakPopovBasis<F>>::add_scaled_shifted_assign
 
 
-# Samples: 659  of event 'cpu_core/cycles/Pu'
-# Event count (approx.): 2775413255
+# Samples: 1  of event 'cpu_core/cycles/Pu'
+# Event count (approx.): 500500
 #
-# Children      Self  Command          Shared Object             Symbol                                                                                                                                                                                                                                                                                            
-# ........  ........  ...............  ........................  ..................................................................................................................................................................................................................................................................................................
+# Children      Self  Command          Shared Object         Symbol
+# ........  ........  ...............  ....................  ......................
 #
-    25.12%    25.12%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
-            |          
-            |--5.72%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
-            |          
-             --1.82%--0x98967f
-                       gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
-
-    22.49%    22.49%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
-            |          
-            |--4.48%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
-            |          
-             --1.99%--0x3f
-                       gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
-
-    11.40%     9.27%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] alloc::raw_vec::RawVecInner<A>::finish_grow
-            |          
-            |--3.33%--alloc::raw_vec::RawVecInner<A>::finish_grow
-            |          |          
-            |           --1.16%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::pow_mod
-            |          
-             --1.31%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
-                       alloc::raw_vec::RawVecInner<A>::finish_grow
-
-     5.16%     3.19%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
-            |          
-             --2.53%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::div_rem
-                       |          
-                        --1.61%--alloc::raw_vec::RawVecInner<A>::finish_grow
-
-     5.12%     4.78%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::pow_mod
-     4.85%     4.22%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::add_scaled_packed_at
-     3.32%     3.28%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
-            |          
-             --1.30%--0x9
-                       gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
-
-     2.80%     2.80%  decoder-b1bbad7  libc.so.6                 [.] malloc
-            |          
-             --1.84%--__libc_malloc (inlined)
-
-     2.80%     0.00%  decoder-b1bbad7  libc.so.6                 [.] __libc_malloc (inlined)
+   100.00%   100.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00000000000105b0
             |
-            ---__libc_malloc (inlined)
+            ---0x7effe7994967
+               0x7effe7995be0
+               0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
 
-     2.36%     2.20%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::gcd
-     2.07%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000001
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe7994967
             |
-            ---0x1
+            ---0x7effe7994967
+               0x7effe7995be0
+               0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
 
-     2.02%     1.49%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::roots::field_roots::base_field_roots
-     1.99%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x000000000000003f
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe7995be0
             |
-            ---0x3f
-               gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate_hasse
+            ---0x7effe7995be0
+               0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
 
-     1.96%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x0000000000000009
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe79943df
             |
-            ---0x9
-               |          
-                --1.30%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_mod
+            ---0x7effe79943df
+               0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
 
-     1.90%     0.00%  decoder-b1bbad7  [unknown]                 [.] 0x000000000098967f
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe7997b90
             |
-            ---0x98967f
-               |          
-                --1.82%--gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::evaluate
+            ---0x7effe7997b90
+               0x7effe79864f0
+               0x7effe79835b0
 
-     1.86%     1.53%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::poly::arithmetic::<impl gs_engine::poly::Polynomial<F>>::multiply_truncated
-     1.69%     1.69%  decoder-b1bbad7  libc.so.6                 [.] cfree
-     1.69%     0.00%  decoder-b1bbad7  libc.so.6                 [.] __libc_free (inlined)
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe79864f0
             |
-            ---__libc_free (inlined)
+            ---0x7effe79864f0
+               0x7effe79835b0
 
-     1.31%     1.31%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::module::interpolate_module
-     1.29%     1.01%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] core::ptr::drop_in_place<gs_engine::roots::roth_ruckenstein::Frame<fgf::field::gf16::Gf16>>
-     1.15%     1.15%  decoder-b1bbad7  decoder-b1bbad7bc457cedf  [.] gs_engine::interpolation::validate_result
+   100.00%     0.00%  decoder-b1bbad7  ld-linux-x86-64.so.2  [.] 0x00007effe79835b0
+            |
+            ---0x7effe79835b0
+
 
 
 #
-# (Tip: Create an archive with symtabs to analyse on other machine: perf archive)
+# (Tip: To add Node.js USDT(User-Level Statically Defined Tracing): perf buildid-cache --add `which node`)
 #

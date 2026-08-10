@@ -22,6 +22,16 @@ releases follow [Semantic Versioning](https://semver.org/).
   allocation, executing interpolation, root extraction, and scoring every call.
   Root extraction reuses scratch pools throughout, and the previous hidden
   exact-repeat memoization was removed in favor of this always-on reuse.
+- Polynomial products now reuse output buffers, defer normalization to operation
+  boundaries, and avoid materializing coefficients outside the requested
+  precision. Affine root transforms retain prefix-power, descriptor, product,
+  and output storage between calls.
+- Weak-Popov interpolation stores rows in one packed slab with cached degree
+  and leading-term metadata. Product benchmarks now cover sparse, imbalanced,
+  truncated, and batched geometries; interpolation benchmarks report both
+  one-shot and reusable module execution.
+- Updated `scripts/profiles/2026-08-10-intel-core-ultra-7-258v` records the
+  resulting hot-loop instruction and allocation profile on the reference host.
 - Replaced aggregate benchmark binaries with Criterion stage and end-to-end
   groups, explicit strategy comparisons, allocation/retained-memory reporting,
   reproducibility metadata, frozen GF8/GF16 candidate fixtures, and external

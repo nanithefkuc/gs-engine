@@ -1,32 +1,32 @@
-# started on Mon Aug 10 12:45:56 2026
+# started on Mon Aug 10 16:06:34 2026
 
 
- Performance counter stats for 'cargo bench --all-features --bench decoder -- warmed-changed-word/gf16/v3_gfni_crypto/additive/n64/k16 --profile-time 1':
+ Performance counter stats for 'cargo bench --all-features --bench decoder -- warmed-changed-word/gf16/v3_gfni_crypto/additive/n64/k16 --profile-time 5':
 
-                 0      context-switches:u               #      0.0 cs/sec  cs_per_second     
+                 0      context-switches:u               #      0.0 cs/sec  cs_per_second
                  0      cpu-migrations:u                 #      0.0 migrations/sec  migrations_per_second
-              7615      page-faults:u                    #   4494.6 faults/sec  page_faults_per_second
-           1694.27 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized       
-           4442422      cpu_core/branch-misses/u         #      0.2 %  branch_miss_rate         (99.57%)
-        2901011727      cpu_core/branches/u              #   1712.3 M/sec  branch_frequency     (99.57%)
-        7735426237      cpu_core/cpu-cycles/u            #      4.6 GHz  cycles_frequency       (99.57%)
-       20113198571      cpu_core/instructions/u          #      2.6 instructions  insn_per_cycle  (99.57%)
-            421651      cpu_atom/branch-misses/u         #      1.9 %  branch_miss_rate         (10.03%)
-          17000381      cpu_atom/branches/u              #     10.0 M/sec  branch_frequency     (10.19%)
-          35940513      cpu_atom/cpu-cycles/u            #      0.0 GHz  cycles_frequency       (10.57%)
-          23554489      cpu_atom/instructions/u          #      0.8 instructions  insn_per_cycle  (10.79%)
-             TopdownL1 (cpu_core)                        #     62.3 %  tma_backend_bound      
-                                                         #      1.4 %  tma_bad_speculation    
-                                                         #      6.6 %  tma_frontend_bound     
-                                                         #     29.7 %  tma_retiring             (99.57%)
-             TopdownL1 (cpu_atom)                        #     19.8 %  tma_bad_speculation      (18.80%)
-                                                         #     33.4 %  tma_backend_bound        (16.99%)
-                                                         #      0.0 %  tma_frontend_bound       (16.99%)
-                                                         #      0.0 %  tma_retiring             (14.54%)
+              7633      page-faults:u                    #   1507.9 faults/sec  page_faults_per_second
+           5061.95 msec task-clock:u                     #      1.0 CPUs  CPUs_utilized
+           6706347      cpu_core/branch-misses/u         #      0.1 %  branch_miss_rate         (2.73%)
+        6607273804      cpu_core/branches/u              #   1305.3 M/sec  branch_frequency     (2.73%)
+       13826512052      cpu_core/cpu-cycles/u            #      2.7 GHz  cycles_frequency       (2.73%)
+       48967244424      cpu_core/instructions/u          #      3.5 instructions  insn_per_cycle  (2.73%)
+          10135669      cpu_atom/branch-misses/u         #      0.1 %  branch_miss_rate         (71.41%)
+        8656574549      cpu_atom/branches/u              #   1710.1 M/sec  branch_frequency     (71.42%)
+       18261951266      cpu_atom/cpu-cycles/u            #      3.6 GHz  cycles_frequency       (71.42%)
+       63917421073      cpu_atom/instructions/u          #      3.5 instructions  insn_per_cycle  (71.47%)
+             TopdownL1 (cpu_core)                        #     57.4 %  tma_backend_bound
+                                                         #      1.2 %  tma_bad_speculation
+                                                         #      3.2 %  tma_frontend_bound
+                                                         #     38.3 %  tma_retiring             (2.73%)
+             TopdownL1 (cpu_atom)                        #      1.5 %  tma_bad_speculation      (71.53%)
+                                                         #     50.1 %  tma_backend_bound        (71.50%)
+                                                         #      0.0 %  tma_frontend_bound       (80.45%)
+                                                         #      0.0 %  tma_retiring             (80.38%)
 
-       1.696337516 seconds time elapsed
+       5.066850588 seconds time elapsed
 
-       1.665923000 seconds user
-       0.025287000 seconds sys
+       4.975396000 seconds user
+       0.035378000 seconds sys
 
 

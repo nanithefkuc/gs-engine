@@ -23,11 +23,15 @@ profile_case() {
     tier=$1
     filter=$2
     data=$profile_dir/$tier.data
-    perf stat --output "$profile_dir/$tier.stat.txt" -- \
+    stat=$profile_dir/$tier.stat.txt
+    report=$profile_dir/$tier.report.txt
+    perf stat --output "$stat" -- \
         cargo bench --all-features --bench decoder -- "$filter" --profile-time "$seconds"
+    sed -i 's/[[:space:]]*$//' "$stat"
     perf record --quiet --freq 999 --call-graph dwarf --output "$data" -- \
         cargo bench --all-features --bench decoder -- "$filter" --profile-time "$seconds"
-    perf report --stdio --percent-limit 1 --input "$data" >"$profile_dir/$tier.report.txt"
+    perf report --stdio --percent-limit 1 --input "$data" \
+        | sed 's/[[:space:]]*$//' >"$report"
     rm -f "$data"
     printf '%s\n' "tier=$tier;filter=$filter" >>"$profile_dir/metadata.txt"
 }
