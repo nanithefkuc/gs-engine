@@ -30,6 +30,8 @@ pub use evaluate::{
     BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER,
 };
 #[cfg(feature = "internals")]
+pub use evaluate::{ScoringStrategy, score_candidates_with_strategy};
+#[cfg(feature = "internals")]
 pub use interpolation::{
     InterpolationConstraint, InterpolationMonomial, ReferenceInterpolationLimits,
     interpolate_reference, reference_constraints, reference_monomials,

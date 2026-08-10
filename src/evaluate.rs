@@ -16,12 +16,48 @@ pub const BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER: usize = 64;
 pub const BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER: usize = 32;
 /// Conservative measured butterfly-fft crossover for scoring at least sixteen candidates.
 pub const BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER: usize = 16;
+/// Candidate-scoring implementation override.
+///
+/// This is exposed only by the crate's `internals` feature so benchmarks can
+/// force both sides of the automatic selector.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScoringStrategy {
+    /// Use the measured point/candidate crossover.
+    Auto,
+    /// Evaluate each candidate with Horner's method.
+    Horner,
+    /// Require packed butterfly-FFT evaluation.
+    ButterflyFft,
+}
 
 pub(crate) fn score_candidates<F: ButterflyKernels>(
     domain: &EvaluationDomain<F>,
     received: &[F::Elem],
     candidates: &[Polynomial<F>],
     radius: usize,
+    scratch: &mut DecodeScratch<F>,
+    output: &mut Vec<Polynomial<F>>,
+) -> Result<(), DecodeError> {
+    score_candidates_with_strategy(
+        domain,
+        received,
+        candidates,
+        radius,
+        ScoringStrategy::Auto,
+        scratch,
+        output,
+    )
+}
+
+/// Score candidates with an explicit implementation strategy.
+///
+/// The forced butterfly-FFT strategy requires an additive or affine domain.
+pub fn score_candidates_with_strategy<F: ButterflyKernels>(
+    domain: &EvaluationDomain<F>,
+    received: &[F::Elem],
+    candidates: &[Polynomial<F>],
+    radius: usize,
+    strategy: ScoringStrategy,
     scratch: &mut DecodeScratch<F>,
     output: &mut Vec<Polynomial<F>>,
 ) -> Result<(), DecodeError> {
@@ -39,7 +75,14 @@ pub(crate) fn score_candidates<F: ButterflyKernels>(
             })?;
     }
 
-    if domain.transform_plan().is_some() && use_butterfly_fft(domain.len(), candidates.len()) {
+    let use_fft = match strategy {
+        ScoringStrategy::Auto => {
+            domain.transform_plan().is_some() && use_butterfly_fft(domain.len(), candidates.len())
+        }
+        ScoringStrategy::Horner => false,
+        ScoringStrategy::ButterflyFft => true,
+    };
+    if use_fft {
         score_butterfly_fft(domain, received, candidates, radius, scratch, output)
     } else {
         score_horner(

@@ -29,6 +29,7 @@ harness = false
 
 [[bench]]
 name = "scoring"
+required-features = ["internals"]
 harness = false
 
 [[bench]]

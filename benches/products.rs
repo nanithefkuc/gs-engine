@@ -1,97 +1,153 @@
+mod common;
+
 use std::hint::black_box;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
-use fgf::kernel::{FieldKernels, backend_for};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use fgf::{Gf8, Gf16};
-use gs_engine::{Polynomial, PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
+use gs_engine::{PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
-fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {
-    let coefficients: Vec<_> = (0..count)
-        .map(|_| {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            F::read(&state.to_le_bytes()[..F::BYTES])
-        })
-        .collect();
-    Polynomial::from_coefficients(&coefficients).unwrap()
+use common::{backend_name, generated_polynomial, measure_allocations, report_allocations};
+
+#[derive(Clone, Copy)]
+struct ProductCase {
+    left: usize,
+    right: usize,
+    precision: usize,
+    batch: usize,
+    shape: &'static str,
 }
 
-fn elapsed(mut operation: impl FnMut(), iterations: usize) -> Duration {
-    let start = Instant::now();
-    for _ in 0..iterations {
-        operation();
-    }
-    start.elapsed()
-}
+const PRODUCT_CASES: &[ProductCase] = &[
+    ProductCase {
+        left: 8,
+        right: 8,
+        precision: 15,
+        batch: 1,
+        shape: "balanced-full",
+    },
+    ProductCase {
+        left: 32,
+        right: 4,
+        precision: 35,
+        batch: 4,
+        shape: "unbalanced-full",
+    },
+    ProductCase {
+        left: 128,
+        right: 8,
+        precision: 32,
+        batch: 8,
+        shape: "unbalanced-truncated",
+    },
+    ProductCase {
+        left: 96,
+        right: 64,
+        precision: 40,
+        batch: 16,
+        shape: "balanced-truncated",
+    },
+    ProductCase {
+        left: 512,
+        right: 32,
+        precision: 128,
+        batch: 4,
+        shape: "unbalanced-truncated-large",
+    },
+    ProductCase {
+        left: 1_024,
+        right: 256,
+        precision: 640,
+        batch: 1,
+        shape: "unbalanced-half-large",
+    },
+];
 
-fn run<F: ButterflyKernels>(field: &str) {
-    let backend = backend_for::<F>().name();
-    for coefficients in [
-        8_usize, 16, 32, 64, 128, 256, 512, 1_024, 2_048, 4_096, 8_192, 16_384, 32_768,
-    ] {
-        if (coefficients * 2 - 1).next_power_of_two() as u128 > F::ORDER {
-            break;
+fn run_field<F: ButterflyKernels>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    field: &str,
+) {
+    for &case in PRODUCT_CASES {
+        let full_count = case.left + case.right - 1;
+        if full_count.next_power_of_two() as u128 > F::ORDER {
+            continue;
         }
-        let batches: &[usize] = if coefficients >= 16_384 {
-            &[1, 4]
-        } else {
-            &[1, 4, 8, 16]
-        };
-        for &batch in batches {
-            let left: Vec<_> = (0..batch)
-                .map(|lane| generated::<F>(coefficients, lane as u64 + 1))
-                .collect();
-            let right: Vec<_> = (0..batch)
-                .map(|lane| generated::<F>(coefficients, lane as u64 + 10_000))
-                .collect();
-            let pairs: Vec<_> = left.iter().zip(&right).collect();
-            let iterations = (4_096 / coefficients / batch).max(1);
+        let left: Vec<_> = (0..case.batch)
+            .map(|lane| generated_polynomial::<F>(case.left, lane as u64 + 1))
+            .collect();
+        let right: Vec<_> = (0..case.batch)
+            .map(|lane| generated_polynomial::<F>(case.right, lane as u64 + 10_000))
+            .collect();
+        let pairs: Vec<_> = left.iter().zip(&right).collect();
+        let geometry = format!(
+            "{field}/{}/left{}/right{}/precision{}/batch{}/{}",
+            backend_name::<F>(),
+            case.left,
+            case.right,
+            case.precision,
+            case.batch,
+            case.shape
+        );
+        group.throughput(Throughput::Elements((case.precision * case.batch) as u64));
+
+        for (name, strategy) in [
+            ("forced-schoolbook", ProductStrategy::Schoolbook),
+            ("forced-afft", ProductStrategy::Afft),
+            ("auto", ProductStrategy::Auto),
+        ] {
+            let ((scratch, output), allocations) = measure_allocations(|| {
+                let mut scratch = PolynomialProductScratch::new();
+                let mut output = Vec::new();
+                multiply_batch_truncated(
+                    &pairs,
+                    case.precision,
+                    strategy,
+                    &mut scratch,
+                    &mut output,
+                )
+                .unwrap();
+                (scratch, output)
+            });
+            black_box((&scratch, &output));
+            report_allocations(
+                &format!("products/{name}/{geometry}/prepared-false"),
+                allocations,
+            );
+
             let mut scratch = PolynomialProductScratch::new();
             let mut output = Vec::new();
-            let schoolbook = elapsed(
-                || {
-                    multiply_batch_truncated(
-                        black_box(&pairs),
-                        coefficients * 2 - 1,
-                        ProductStrategy::Schoolbook,
-                        &mut scratch,
-                        &mut output,
-                    )
-                    .unwrap();
-                    black_box(&output);
+            multiply_batch_truncated(&pairs, case.precision, strategy, &mut scratch, &mut output)
+                .unwrap();
+            group.bench_function(
+                BenchmarkId::new(name, format!("{geometry}/prepared-true")),
+                |bencher| {
+                    bencher.iter(|| {
+                        multiply_batch_truncated(
+                            black_box(&pairs),
+                            case.precision,
+                            strategy,
+                            &mut scratch,
+                            &mut output,
+                        )
+                        .unwrap();
+                        black_box(&output);
+                    });
                 },
-                iterations,
-            );
-            let afft = elapsed(
-                || {
-                    multiply_batch_truncated(
-                        black_box(&pairs),
-                        coefficients * 2 - 1,
-                        ProductStrategy::Afft,
-                        &mut scratch,
-                        &mut output,
-                    )
-                    .unwrap();
-                    black_box(&output);
-                },
-                iterations,
-            );
-            println!(
-                "{field},{backend},schoolbook,{coefficients},{batch},{iterations},{}",
-                schoolbook.as_nanos()
-            );
-            println!(
-                "{field},{backend},afft,{coefficients},{batch},{iterations},{}",
-                afft.as_nanos()
             );
         }
     }
 }
 
-fn main() {
-    println!("field,backend,algorithm,coefficients,batch,iterations,nanoseconds");
-    run::<Gf8>("gf8");
-    run::<Gf16>("gf16");
+fn products(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("products");
+    group.warm_up_time(Duration::from_secs(1));
+    group.measurement_time(Duration::from_secs(3));
+    group.sample_size(20);
+    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf16>(&mut group, "gf16");
+    group.finish();
 }
+
+criterion_group!(benches, products);
+criterion_main!(benches);
