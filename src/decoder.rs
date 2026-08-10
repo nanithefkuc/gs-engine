@@ -114,7 +114,7 @@ impl<F: ButterflyKernels> GsPlan<F> {
             }
             .into());
         }
-        let interpolation = InterpolationPlan::new(parameters, domain.points())?;
+        let interpolation = InterpolationPlan::new_with_domain(parameters, &domain)?;
         Ok(Self {
             parameters,
             domain,
@@ -160,6 +160,7 @@ impl<F: ButterflyKernels> GsPlan<F> {
     ) -> Result<(), DecodeError> {
         if self.domain.transform_plan().is_some() {
             scratch.reserve_evaluation(self.domain.len(), self.parameters.y_degree())?;
+            scratch.module.reserve_transform(self.domain.len())?;
         }
         let root_capacity = self
             .parameters
@@ -213,6 +214,7 @@ impl<F: ButterflyKernels> GsPlan<F> {
                 self.domain.points(),
                 received,
                 &self.interpolation,
+                Some(&self.domain),
                 &mut scratch.module,
                 &mut scratch.interpolation_output,
             )

@@ -25,6 +25,10 @@ pub struct ModuleScratch<F: FieldKernels> {
     product: Polynomial<F>,
     basis: ModuleSlab<F>,
     reduction: WeakPopovScratch,
+    /// Packed received evaluations for the inverse-transform path.
+    transform_rows: Vec<u8>,
+    /// Novel-to-monomial conversion scratch for the inverse-transform path.
+    conversion: Vec<u8>,
 }
 
 struct ModuleSlab<F: FieldKernels> {
@@ -237,6 +241,8 @@ impl<F: FieldKernels> ModuleScratch<F> {
             product: Polynomial::zero(),
             basis: ModuleSlab::new(),
             reduction: WeakPopovScratch::new(),
+            transform_rows: Vec::new(),
+            conversion: Vec::new(),
         }
     }
 
@@ -253,6 +259,36 @@ impl<F: FieldKernels> ModuleScratch<F> {
                 .sum::<usize>()
             + self.received_powers.capacity() * core::mem::size_of::<Polynomial<F>>()
             + self.reduction.capacity() * core::mem::size_of::<Option<usize>>()
+            + self.transform_rows.capacity()
+            + self.conversion.capacity()
+    }
+
+    /// Pre-size the transform scratch buffers for a domain of `size` points.
+    pub(crate) fn reserve_transform(&mut self, size: usize) -> Result<(), ConfigError> {
+        use butterfly_fft::basis::conversion_scratch_elements;
+
+        let row_len = F::BYTES;
+        let evaluation_bytes = size
+            .checked_mul(row_len)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "transform interpolation rows",
+            })?;
+        let conversion_bytes = conversion_scratch_elements(size)
+            .checked_mul(row_len)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "transform interpolation conversion",
+            })?;
+        resize_zeroed(
+            &mut self.transform_rows,
+            evaluation_bytes,
+            "transform received rows",
+        )?;
+        resize_zeroed(
+            &mut self.conversion,
+            conversion_bytes,
+            "transform received conversion",
+        )?;
+        Ok(())
     }
 }
 
@@ -264,7 +300,7 @@ impl<F: FieldKernels> Default for ModuleScratch<F> {
 
 /// Construct an interpolation polynomial by reducing the Guruswami–Sudan
 /// interpolation module to weak Popov form.
-pub fn interpolate_module<F: FieldKernels>(
+pub fn interpolate_module<F: butterfly_fft::core::kernel::ButterflyKernels>(
     parameters: GsParameters,
     points: &[F::Elem],
     values: &[F::Elem],
@@ -272,28 +308,55 @@ pub fn interpolate_module<F: FieldKernels>(
     let plan = InterpolationPlan::new(parameters, points)?;
     let mut scratch = ModuleScratch::new();
     let mut output = BivariatePolynomial::zero();
-    interpolate_module_into(parameters, points, values, &plan, &mut scratch, &mut output)?;
+    interpolate_module_into(
+        parameters,
+        points,
+        values,
+        &plan,
+        None,
+        &mut scratch,
+        &mut output,
+    )?;
     Ok(output)
 }
 
 /// Reduce the interpolation module into reusable `output` storage, recycling the
 /// packed basis and `R` powers held by `scratch` and the plan-owned invariants.
-pub fn interpolate_module_into<F: FieldKernels>(
+///
+/// When `domain` is `Some` and the plan selected the transform strategy, the
+/// received word is interpolated by an inverse `butterfly-fft` transform plus
+/// novel-to-monomial conversion (`O(n log n)`) instead of incremental Newton
+/// interpolation (`O(n²)`).
+pub fn interpolate_module_into<F: butterfly_fft::core::kernel::ButterflyKernels>(
     parameters: GsParameters,
     points: &[F::Elem],
     values: &[F::Elem],
     plan: &InterpolationPlan<F>,
+    domain: Option<&crate::domain::EvaluationDomain<F>>,
     scratch: &mut ModuleScratch<F>,
     output: &mut BivariatePolynomial<F>,
 ) -> Result<(), InterpolationError> {
     validate_inputs(parameters, points, values)?;
-    interpolate_received_into(
-        points,
-        values,
-        &plan.newton_partials,
-        &plan.newton_denominators,
-        &mut scratch.received,
-    )?;
+    match (plan.strategy, domain) {
+        (crate::interpolation::plan::DomainStrategy::Transform, Some(domain)) => {
+            interpolate_received_transform::<F>(
+                domain,
+                values,
+                &mut scratch.transform_rows,
+                &mut scratch.conversion,
+                &mut scratch.received,
+            )?;
+        }
+        _ => {
+            interpolate_received_into(
+                points,
+                values,
+                &plan.newton_partials,
+                &plan.newton_denominators,
+                &mut scratch.received,
+            )?;
+        }
+    }
     let multiplicity = parameters.multiplicity();
     fill_polynomial_powers(
         &scratch.received,
@@ -340,6 +403,66 @@ pub fn interpolate_module_into<F: FieldKernels>(
         })?;
     scratch.basis.materialize(row, output)?;
     validate_result(parameters, points, values, output)?;
+    Ok(())
+}
+
+/// Interpolate a received word through the inverse `butterfly-fft` transform.
+///
+/// Packs received values into byte rows, executes the inverse transform and
+/// novel-to-monomial conversion in place, then reads the monomial coefficients
+/// back into the `received` polynomial. Allocation-free once `transform_rows`
+/// and `conversion` are sized for the domain.
+fn interpolate_received_transform<F: butterfly_fft::core::kernel::ButterflyKernels>(
+    domain: &crate::domain::EvaluationDomain<F>,
+    values: &[F::Elem],
+    transform_rows: &mut Vec<u8>,
+    conversion: &mut Vec<u8>,
+    received: &mut Polynomial<F>,
+) -> Result<(), InterpolationError> {
+    use butterfly_fft::basis::{conversion_scratch_elements, inverse_interpolate_bytes};
+
+    let plan = domain
+        .transform_plan()
+        .ok_or(InterpolationError::InvalidResult {
+            reason: "transform strategy selected without a transform plan",
+        })?;
+    let size = plan.size();
+    debug_assert_eq!(size, values.len());
+
+    let row_len = F::BYTES;
+    let evaluation_bytes = size
+        .checked_mul(row_len)
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "transform received interpolation bytes",
+        })?;
+    let conversion_bytes = conversion_scratch_elements(size)
+        .checked_mul(row_len)
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "transform received conversion bytes",
+        })?;
+    resize_zeroed(transform_rows, evaluation_bytes, "transform received rows")?;
+    resize_zeroed(
+        conversion,
+        conversion_bytes,
+        "transform received conversion",
+    )?;
+
+    for (point, &value) in values.iter().enumerate() {
+        let start = point * row_len;
+        F::write(&mut transform_rows[start..start + row_len], value);
+    }
+
+    inverse_interpolate_bytes::<F>(
+        &mut transform_rows[..evaluation_bytes],
+        row_len,
+        plan,
+        &mut conversion[..conversion_bytes],
+    )
+    .map_err(InterpolationError::from)?;
+
+    // The transform output is already packed field elements in low-to-high
+    // monomial order, so assign_packed reuses it without an intermediate Vec.
+    received.assign_packed(&transform_rows[..evaluation_bytes])?;
     Ok(())
 }
 

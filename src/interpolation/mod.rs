@@ -89,6 +89,8 @@ pub enum InterpolationError {
     /// The shared weak-Popov reducer rejected the row geometry or termination
     /// measure.
     Reduction(gfm::ReduceError),
+    /// A `butterfly-fft` transform buffer had inconsistent geometry.
+    Transform(butterfly_fft::error::TransformLengthError),
     /// Point or received-value length differs from the planned code length.
     LengthMismatch {
         /// Planned number of points.
@@ -171,6 +173,7 @@ impl fmt::Display for InterpolationError {
                     "interpolation produced an invalid result: {reason}"
                 )
             }
+            Self::Transform(error) => error.fmt(formatter),
             Self::Reduction(error) => error.fmt(formatter),
             Self::ConstraintViolation {
                 point_index,
@@ -193,6 +196,12 @@ impl From<ConfigError> for InterpolationError {
 impl From<gfm::ReduceError> for InterpolationError {
     fn from(error: gfm::ReduceError) -> Self {
         Self::Reduction(error)
+    }
+}
+
+impl From<butterfly_fft::error::TransformLengthError> for InterpolationError {
+    fn from(error: butterfly_fft::error::TransformLengthError) -> Self {
+        Self::Transform(error)
     }
 }
 

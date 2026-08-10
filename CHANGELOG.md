@@ -5,13 +5,21 @@ All notable changes to gs-engine are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
 ### Added
+- Domain-specialized interpolation for additive-subspace and affine-coset
+  domains: the vanishing polynomial `G(X)` is built from the `butterfly-fft`
+  subspace polynomial, and the received-word interpolant `R` is computed by an
+  inverse transform plus novel-to-monomial conversion (`O(n log n)`) instead
+  of incremental Newton interpolation. Both paths produce byte-identical
+  module interpolation results. `InterpolationPlan::new_with_domain` selects
+  the strategy from the domain; `interpolate_module_into` accepts an optional
+  domain to dispatch the transform path. Changed-word decode on an additive
+  domain allocates zero after preparation.
 - `GsPlan` now precomputes and owns the received-word-independent interpolation
-  invariants (domain vanishing polynomial, its powers, module column shifts, and
-  the Newton interpolation basis), exposed as `InterpolationPlan`, with
-  `GsPlan::prepared_bytes` reporting the bounded prepared memory before a decode.
+  invariants (domain vanishing polynomial, its powers, module column shifts,
+  and the Newton interpolation basis), exposed as `InterpolationPlan`, with
+  `GsPlan::prepared_bytes` reporting the bounded prepared memory before a
+  decode.
 - `interpolate_module_into` plus a reusable `ModuleScratch`, and, under the
   `internals` feature, `DecodeScratch` capacity inspectors for benchmark
   diagnostics.
