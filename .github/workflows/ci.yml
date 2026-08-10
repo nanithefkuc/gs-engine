@@ -18,9 +18,9 @@ jobs:
           - name: default
             command: cargo test --all-features
           - name: scalar
-            command: FFF_BACKEND=scalar cargo test --all-features
+            command: SIMD_BACKEND=scalar cargo test --all-features
           - name: no-std
-            command: FFF_BACKEND=scalar cargo test --no-default-features
+            command: SIMD_BACKEND=scalar cargo test --no-default-features
     name: test (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4

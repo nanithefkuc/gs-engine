@@ -99,20 +99,20 @@ The primary decoding API is `GsPlan::decode_into(received, scratch, output)`.
 
 ## Benchmarks and crossover policy
 
-Each benchmark prints the field and the runtime-selected FFF backend. Run the
+Each benchmark prints the field and the runtime-selected SIMD backend. Run the
 matrix explicitly with:
 
 ```text
-FFF_BACKEND=scalar cargo bench --bench interpolation
-FFF_BACKEND=gfni  cargo bench --bench interpolation
-FFF_BACKEND=scalar cargo bench --bench products
-FFF_BACKEND=gfni  cargo bench --bench products
-FFF_BACKEND=scalar cargo bench --bench root_extraction
-FFF_BACKEND=gfni  cargo bench --bench root_extraction
-FFF_BACKEND=scalar cargo bench --bench scoring
-FFF_BACKEND=gfni  cargo bench --bench scoring
-FFF_BACKEND=scalar cargo bench --bench decoder
-FFF_BACKEND=gfni  cargo bench --bench decoder
+SIMD_BACKEND=scalar cargo bench --bench interpolation
+SIMD_BACKEND=gfni  cargo bench --bench interpolation
+SIMD_BACKEND=scalar cargo bench --bench products
+SIMD_BACKEND=gfni  cargo bench --bench products
+SIMD_BACKEND=scalar cargo bench --bench root_extraction
+SIMD_BACKEND=gfni  cargo bench --bench root_extraction
+SIMD_BACKEND=scalar cargo bench --bench scoring
+SIMD_BACKEND=gfni  cargo bench --bench scoring
+SIMD_BACKEND=scalar cargo bench --bench decoder
+SIMD_BACKEND=gfni  cargo bench --bench decoder
 ```
 
 `gfni` requests fall back to a supported backend on hosts that cannot execute
