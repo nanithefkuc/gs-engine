@@ -134,6 +134,7 @@ pub struct AlekhnovichScratch<F: ButterflyKernels> {
     frames: Vec<DncFrame<F>>,
     completed: Option<Vec<AffineRootFamily<F>>>,
     products: PolynomialProductScratch<F>,
+    transformed: BivariatePolynomial<F>,
     roth: RothRuckensteinScratch<F>,
 }
 
@@ -145,6 +146,7 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
             frames: Vec::new(),
             completed: None,
             products: PolynomialProductScratch::new(),
+            transformed: BivariatePolynomial::zero(),
             roth: RothRuckensteinScratch::new(),
         }
     }
@@ -396,13 +398,14 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
                         context: "Alekhnovich transformed coefficient bound",
                     })?;
                 budget.charge_materialization::<F>(transform_bound, 0, limits)?;
-                let transformed = frame.polynomial.substitute_y_affine_truncated_fast(
+                frame.polynomial.substitute_y_affine_truncated_fast_into(
                     &family.prefix,
                     family.tail_degree,
                     frame.precision,
                     &mut scratch.products,
+                    &mut scratch.transformed,
                 )?;
-                let Some(valuation) = transformed.x_valuation() else {
+                let Some(valuation) = scratch.transformed.x_valuation() else {
                     insert_family(&mut refined, family, &mut budget, limits)?;
                     frame.state = FrameState::Refine {
                         coarse,
@@ -430,7 +433,7 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
                 }
                 let residual_precision = frame.precision - valuation;
                 budget.charge_materialization::<F>(transform_bound, 0, limits)?;
-                let residual = transformed.divide_by_x_power(valuation)?;
+                let residual = scratch.transformed.divide_by_x_power(valuation)?;
                 frame.state = FrameState::AwaitTail {
                     coarse,
                     next,

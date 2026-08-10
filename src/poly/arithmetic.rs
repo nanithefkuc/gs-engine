@@ -131,7 +131,7 @@ impl<F: FieldKernels> Polynomial<F> {
                 continue;
             }
             let source_count = source.coefficient_count().min(output_count - shift);
-            result.add_scaled_packed_at(
+            result.add_scaled_packed_at_raw(
                 scale,
                 &source.as_packed()[..source_count * F::BYTES],
                 shift,
@@ -353,6 +353,18 @@ impl<F: FieldKernels> Polynomial<F> {
         source: &[u8],
         shift: usize,
     ) -> Result<(), ConfigError> {
+        self.add_scaled_packed_at_raw(scale, source, shift)?;
+        self.normalize();
+        Ok(())
+    }
+
+    #[inline]
+    fn add_scaled_packed_at_raw(
+        &mut self,
+        scale: F::Elem,
+        source: &[u8],
+        shift: usize,
+    ) -> Result<(), ConfigError> {
         if source.is_empty() || scale.is_zero() {
             return Ok(());
         }
@@ -380,7 +392,6 @@ impl<F: FieldKernels> Polynomial<F> {
                 F::write(output, F::read(output).add(scale.mul(F::read(input))));
             }
         }
-        self.normalize();
         Ok(())
     }
 
@@ -442,7 +453,11 @@ impl<F: FieldKernels> Polynomial<F> {
                 continue;
             }
             let source_count = source.coefficient_count().min(output_count - shift);
-            out.add_scaled_packed_at(scale, &source.as_packed()[..source_count * F::BYTES], shift)?;
+            out.add_scaled_packed_at_raw(
+                scale,
+                &source.as_packed()[..source_count * F::BYTES],
+                shift,
+            )?;
         }
         out.normalize();
         Ok(())
