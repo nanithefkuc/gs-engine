@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
-use cafft::basis::conversion_scratch_elements;
-use cafft::core::kernel::ButterflyKernels;
+use butterfly_fft::basis::conversion_scratch_elements;
+use butterfly_fft::core::kernel::ButterflyKernels;
 
 use crate::geometry::checked_product;
 use crate::{

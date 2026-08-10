@@ -1,21 +1,21 @@
 use alloc::vec::Vec;
 
-use cafft::basis::{conversion_scratch_elements, monomial_to_novel_bytes};
-use cafft::core::kernel::ButterflyKernels;
+use butterfly_fft::basis::{conversion_scratch_elements, monomial_to_novel_bytes};
+use butterfly_fft::core::kernel::ButterflyKernels;
 
 use crate::decoder::DecodeError;
 use crate::{ConfigError, DecodeScratch, EvaluationDomain, Polynomial};
 
-/// Conservative measured CAFFT crossover for scoring one candidate.
-pub const CAFFT_SINGLE_SCORING_CROSSOVER: usize = 256;
-/// Measured CAFFT crossover for scoring two or three candidates.
-pub const CAFFT_BATCH2_SCORING_CROSSOVER: usize = 64;
-/// Conservative measured CAFFT crossover for scoring four to seven candidates.
-pub const CAFFT_BATCH4_SCORING_CROSSOVER: usize = 64;
-/// Conservative measured CAFFT crossover for scoring eight to fifteen candidates.
-pub const CAFFT_BATCH8_SCORING_CROSSOVER: usize = 32;
-/// Conservative measured CAFFT crossover for scoring at least sixteen candidates.
-pub const CAFFT_BATCH16_SCORING_CROSSOVER: usize = 16;
+/// Conservative measured butterfly-fft crossover for scoring one candidate.
+pub const BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER: usize = 256;
+/// Measured butterfly-fft crossover for scoring two or three candidates.
+pub const BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER: usize = 64;
+/// Conservative measured butterfly-fft crossover for scoring four to seven candidates.
+pub const BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER: usize = 64;
+/// Conservative measured butterfly-fft crossover for scoring eight to fifteen candidates.
+pub const BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER: usize = 32;
+/// Conservative measured butterfly-fft crossover for scoring at least sixteen candidates.
+pub const BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER: usize = 16;
 
 pub(crate) fn score_candidates<F: ButterflyKernels>(
     domain: &EvaluationDomain<F>,
@@ -39,8 +39,8 @@ pub(crate) fn score_candidates<F: ButterflyKernels>(
             })?;
     }
 
-    if domain.transform_plan().is_some() && use_cafft(domain.len(), candidates.len()) {
-        score_cafft(domain, received, candidates, radius, scratch, output)
+    if domain.transform_plan().is_some() && use_butterfly_fft(domain.len(), candidates.len()) {
+        score_butterfly_fft(domain, received, candidates, radius, scratch, output)
     } else {
         score_horner(
             domain.points(),
@@ -53,13 +53,13 @@ pub(crate) fn score_candidates<F: ButterflyKernels>(
     }
 }
 
-fn use_cafft(points: usize, candidates: usize) -> bool {
+fn use_butterfly_fft(points: usize, candidates: usize) -> bool {
     let crossover = match candidates {
-        0 | 1 => CAFFT_SINGLE_SCORING_CROSSOVER,
-        2 | 3 => CAFFT_BATCH2_SCORING_CROSSOVER,
-        4..=7 => CAFFT_BATCH4_SCORING_CROSSOVER,
-        8..=15 => CAFFT_BATCH8_SCORING_CROSSOVER,
-        _ => CAFFT_BATCH16_SCORING_CROSSOVER,
+        0 | 1 => BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER,
+        2 | 3 => BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER,
+        4..=7 => BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER,
+        8..=15 => BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER,
+        _ => BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER,
     };
     points >= crossover
 }
@@ -120,7 +120,7 @@ fn score_horner<F: ButterflyKernels>(
     Ok(())
 }
 
-fn score_cafft<F: ButterflyKernels>(
+fn score_butterfly_fft<F: ButterflyKernels>(
     domain: &EvaluationDomain<F>,
     received: &[F::Elem],
     candidates: &[Polynomial<F>],
@@ -132,7 +132,7 @@ fn score_cafft<F: ButterflyKernels>(
     let plan = domain
         .transform_plan()
         .ok_or(DecodeError::InternalInvariant {
-            reason: "CAFFT scoring selected without a transform plan",
+            reason: "butterfly-fft scoring selected without a transform plan",
         })?;
     let row_len = candidates
         .len()
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn cafft_scores_four_candidates_in_packed_lanes() {
+    fn butterfly_fft_scores_four_candidates_in_packed_lanes() {
         let domain = EvaluationDomain::<Gf16>::additive_subspace(64).unwrap();
         let candidates: Vec<_> = (1..=4)
             .map(|value| Polynomial::<Gf16>::constant(gf16(value)).unwrap())

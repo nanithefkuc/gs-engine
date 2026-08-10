@@ -14,7 +14,7 @@ polynomial root extraction, and Hamming-radius filtering. It is `no_std` with
 
 The production decoder is validated for the binary extension fields `fgf::Gf8`
 and `fgf::Gf16`. Generic APIs require the corresponding `fgf::FieldKernels` or
-`cafft::ButterflyKernels` implementation. Root splitting rejects fields whose
+`butterfly_fft::core::kernel::ButterflyKernels` implementation. Root splitting rejects fields whose
 order is not a power of two or whose stable element representation exceeds 16
 bytes; it never falls back to scanning the full field.
 
@@ -22,7 +22,7 @@ bytes; it never falls back to scanning the full field.
 
 `EvaluationDomain::arbitrary` preserves the supplied distinct-point order.
 Additive-subspace and affine-coset constructors derive their point order
-directly from the associated CAFFT plan. `EvaluationDomain::points()` is the
+directly from the associated butterfly-fft plan. `EvaluationDomain::points()` is the
 canonical order for encoding and for the received slice passed to
 `GsPlan::decode_into`.
 
@@ -62,7 +62,7 @@ allocation.
 
 ## Features
 
-- `std` enables standard-library error integration and CAFFT/FGF standard
+- `std` enables standard-library error integration and butterfly-fft/FGF standard
   support.
 - `simd` enables runtime-selected SIMD kernels and implies `std`.
 - `internals` exposes unstable implementation APIs for benchmarking and
@@ -133,11 +133,11 @@ use code length, weighted input size, or domain points as shown.
 | Schoolbook vs. AFFT, 4–7 GF16 products | 255 coefficients | 65,535 coefficients |
 | Schoolbook vs. AFFT, 8–15 GF16 products | 255 coefficients | 32,767 coefficients |
 | Schoolbook vs. AFFT, 16+ GF16 products | 127 coefficients | 8,191 coefficients |
-| Horner vs. CAFFT, 1 candidate | 256 points | 256 points |
-| Horner vs. CAFFT, 2–3 candidates | 64 points | 64 points |
-| Horner vs. CAFFT, 4–7 candidates | 64 points | 64 points |
-| Horner vs. CAFFT, 8–15 candidates | 32 points | 32 points |
-| Horner vs. CAFFT, 16+ candidates | 16 points | 16 points |
+| Horner vs. butterfly-fft, 1 candidate | 256 points | 256 points |
+| Horner vs. butterfly-fft, 2–3 candidates | 64 points | 64 points |
+| Horner vs. butterfly-fft, 4–7 candidates | 64 points | 64 points |
+| Horner vs. butterfly-fft, 8–15 candidates | 32 points | 32 points |
+| Horner vs. butterfly-fft, 16+ candidates | 16 points | 16 points |
 
 GF8 AFFT products remain schoolbook because AFFT did not win before the
 field-sized transform ceiling. `ProductStrategy::Auto` and the default root

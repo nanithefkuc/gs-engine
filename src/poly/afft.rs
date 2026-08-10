@@ -1,10 +1,12 @@
 use alloc::vec::Vec;
 use core::fmt;
 
-use cafft::basis::{conversion_scratch_elements, monomial_to_novel_bytes, novel_to_monomial_bytes};
-use cafft::core::kernel::ButterflyKernels;
-use cafft::core::transform::TransformPlan;
-use cafft::error::{PlanError, TransformLengthError};
+use butterfly_fft::basis::{
+    conversion_scratch_elements, monomial_to_novel_bytes, novel_to_monomial_bytes,
+};
+use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::transform::TransformPlan;
+use butterfly_fft::error::{PlanError, TransformLengthError};
 use fgf::kernel::{Backend, backend_for};
 use fgf::ops;
 

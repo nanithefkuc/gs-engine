@@ -16,7 +16,7 @@ fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {
     Polynomial::from_coefficients(&coefficients).unwrap()
 }
 
-fn compare_forced<F: cafft::core::kernel::ButterflyKernels>(
+fn compare_forced<F: butterfly_fft::core::kernel::ButterflyKernels>(
     left: &Polynomial<F>,
     right: &Polynomial<F>,
     coefficient_count: usize,

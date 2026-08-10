@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use cafft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Field;
 use fgf::kernel::{Backend, backend_for};
 

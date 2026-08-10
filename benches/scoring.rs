@@ -1,9 +1,9 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use cafft::basis::{conversion_scratch_elements, monomial_to_novel_bytes};
-use cafft::core::kernel::ButterflyKernels;
-use cafft::core::transform::TransformPlan;
+use butterfly_fft::basis::{conversion_scratch_elements, monomial_to_novel_bytes};
+use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::transform::TransformPlan;
 use fgf::field::{Elem, Field};
 use fgf::kernel::backend_for;
 use fgf::{Gf8, Gf16};
@@ -56,7 +56,7 @@ fn run<F: ButterflyKernels>(field: &str) {
                 },
                 iterations,
             );
-            let cafft = elapsed(
+            let butterfly_fft = elapsed(
                 || {
                     rows.fill(0);
                     for (lane, candidate) in candidates.iter().enumerate() {
@@ -77,8 +77,8 @@ fn run<F: ButterflyKernels>(field: &str) {
                 horner.as_nanos()
             );
             println!(
-                "{field},{backend},cafft,{size},{candidate_count},{degree},{iterations},{}",
-                cafft.as_nanos()
+                "{field},{backend},butterfly-fft,{size},{candidate_count},{degree},{iterations},{}",
+                butterfly_fft.as_nanos()
             );
         }
     }

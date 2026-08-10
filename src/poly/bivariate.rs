@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use cafft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Elem;
 use fgf::kernel::FieldKernels;
 

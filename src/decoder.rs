@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 use core::fmt;
 
-use cafft::core::kernel::ButterflyKernels;
-use cafft::error::TransformLengthError;
+use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::error::TransformLengthError;
 
 use crate::evaluate::score_candidates;
 use crate::{
@@ -29,7 +29,7 @@ pub enum DecodeError {
     Interpolation(InterpolationError),
     /// Polynomial root extraction failed.
     Roots(RootError),
-    /// A CAFFT execution buffer had inconsistent geometry.
+    /// A butterfly-fft execution buffer had inconsistent geometry.
     Transform(TransformLengthError),
     /// A decoder-internal postcondition was violated.
     InternalInvariant {

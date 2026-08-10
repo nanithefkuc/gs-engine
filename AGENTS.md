@@ -11,7 +11,7 @@ polynomial root extraction, and Hamming-radius filtering. The crate is
 `no_std` with `alloc` when default features are disabled.
 
 Field arithmetic and vector kernels come from [`fgf`](https://github.com/nanithefkuc/fgf);
-the additive-FFT transform comes from [`cafft`](https://github.com/nanithefkuc/cafft);
+the additive-FFT transform comes from [`butterfly-fft`](https://github.com/nanithefkuc/butterfly-fft);
 GF linear algebra comes from [`gfm`](https://github.com/nanithefkuc/gfm). This
 crate owns the GS algorithm itself — parameter search, interpolation, root
 extraction, and candidate scoring.
@@ -34,11 +34,11 @@ extraction, and candidate scoring.
 - `fgf` — field arithmetic, packed-element kernels, backend dispatch. Pinned by
   git revision. The `SIMD_BACKEND` env var (owned by `simdispatch`) selects the
   runtime backend, downgrade-only.
-- `cafft` — additive FFT for batch polynomial multiplication.
+- `butterfly-fft` — additive FFT for batch polynomial multiplication.
 - `gfm` — GF linear algebra for module interpolation.
 
 **Do not write `unsafe` SIMD in this crate.** All intrinsics live upstream in
-`fgf` and `cafft`. The crate root carries `#![forbid(unsafe_code)]`.
+`fgf` and `butterfly-fft`. The crate root carries `#![forbid(unsafe_code)]`.
 
 ## Public surface
 

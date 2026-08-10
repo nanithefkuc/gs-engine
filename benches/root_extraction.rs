@@ -1,7 +1,7 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use cafft::core::kernel::ButterflyKernels;
+use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Field;
 use fgf::kernel::backend_for;
 use fgf::{Gf8, Gf16};
