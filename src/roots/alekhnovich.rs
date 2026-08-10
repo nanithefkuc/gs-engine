@@ -3,7 +3,6 @@ use core::cmp::Ordering;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Field;
-use fgf::kernel::{Backend, backend_for};
 
 use crate::{BivariatePolynomial, ConfigError, Polynomial, PolynomialProductScratch};
 
@@ -13,13 +12,11 @@ use super::roth_ruckenstein::{
 };
 use super::{BaseFieldRoots, RootError, RothRuckensteinLimits, base_field_roots};
 
-/// Default measured packed-kernel crossover in weighted input coefficients.
+/// Default weighted-coefficient crossover to Alekhnovich divide-and-conquer.
 ///
-/// GF16/GFNI first favors divide-and-conquer at weighted size 20,485. The
-/// default keeps Roth–Ruckenstein through 20,000; scalar kernels retain
-/// Roth–Ruckenstein because no divide-and-conquer win was observed in the
-/// measured range. Use [`AlekhnovichLimits::with_roth_ruckenstein_crossover`]
-/// to force a backend-independent threshold.
+/// Roth–Ruckenstein is used at or below this weighted input size (and always on
+/// a scalar backend unless overridden). Set explicitly with
+/// [`AlekhnovichLimits::with_roth_ruckenstein_crossover`]. See `BENCHMARKS.md`.
 pub const DEFAULT_ROTH_RUCKENSTEIN_CROSSOVER: usize = 20_000;
 
 /// Caller-provided bounds for Alekhnovich root extraction.
@@ -258,12 +255,15 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
         limits.max_coefficients,
     )?;
 
-    let crossover = if limits.backend_adaptive_crossover && backend_for::<F>() == Backend::Scalar {
-        usize::MAX
-    } else {
-        limits.roth_ruckenstein_crossover
-    };
-    if weighted_size <= crossover {
+    let root_backend = crate::cost::select_root(crate::cost::RootCostKey {
+        weighted_coefficients: weighted_size,
+        y_degree: polynomial.y_coefficient_count(),
+        target_precision: max_degree,
+        backend: crate::cost::BackendClass::detect::<F>(),
+        roth_ruckenstein_crossover: limits.roth_ruckenstein_crossover,
+        backend_adaptive: limits.backend_adaptive_crossover,
+    });
+    if root_backend == crate::cost::RootBackend::RothRuckenstein {
         return roth_ruckenstein_roots_into(
             polynomial,
             max_degree,
