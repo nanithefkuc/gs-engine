@@ -1,5 +1,7 @@
+#[cfg(feature = "internals")]
+use fgf::Gf8;
+use fgf::Gf16;
 use fgf::field::{Elem, Field};
-use fgf::{Gf8, Gf16};
 use gs_engine::{
     BivariatePolynomial, GsParameters, ParameterLimits, Polynomial, interpolate_koetter,
     interpolate_module,
@@ -17,6 +19,7 @@ fn gf16(value: u16) -> <Gf16 as Field>::Elem {
     Gf16::read(&value.to_le_bytes())
 }
 
+#[cfg(feature = "internals")]
 fn gf8(value: u8) -> <Gf8 as Field>::Elem {
     Gf8::read(&[value])
 }

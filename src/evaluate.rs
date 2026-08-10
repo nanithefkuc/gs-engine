@@ -24,8 +24,10 @@ pub const BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER: usize = 16;
 pub enum ScoringStrategy {
     /// Use the measured point/candidate crossover.
     Auto,
+    #[cfg(feature = "internals")]
     /// Evaluate each candidate with Horner's method.
     Horner,
+    #[cfg(feature = "internals")]
     /// Require packed butterfly-FFT evaluation.
     ButterflyFft,
 }
@@ -79,7 +81,9 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
         ScoringStrategy::Auto => {
             domain.transform_plan().is_some() && use_butterfly_fft(domain.len(), candidates.len())
         }
+        #[cfg(feature = "internals")]
         ScoringStrategy::Horner => false,
+        #[cfg(feature = "internals")]
         ScoringStrategy::ButterflyFft => true,
     };
     if use_fft {
