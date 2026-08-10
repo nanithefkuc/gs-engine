@@ -6,15 +6,15 @@ use butterfly_fft::core::kernel::ButterflyKernels;
 use crate::decoder::DecodeError;
 use crate::{ConfigError, DecodeScratch, EvaluationDomain, Polynomial};
 
-/// Conservative measured butterfly-fft crossover for scoring one candidate.
+/// Butterfly-FFT scoring crossover in points, one candidate. See `BENCHMARKS.md`.
 pub const BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER: usize = 256;
-/// Measured butterfly-fft crossover for scoring two or three candidates.
+/// Butterfly-FFT scoring crossover in points, two or three candidates. See `BENCHMARKS.md`.
 pub const BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER: usize = 64;
-/// Conservative measured butterfly-fft crossover for scoring four to seven candidates.
+/// Butterfly-FFT scoring crossover in points, four to seven candidates. See `BENCHMARKS.md`.
 pub const BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER: usize = 64;
-/// Conservative measured butterfly-fft crossover for scoring eight to fifteen candidates.
+/// Butterfly-FFT scoring crossover in points, eight to fifteen candidates. See `BENCHMARKS.md`.
 pub const BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER: usize = 32;
-/// Conservative measured butterfly-fft crossover for scoring at least sixteen candidates.
+/// Butterfly-FFT scoring crossover in points, sixteen or more candidates. See `BENCHMARKS.md`.
 pub const BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER: usize = 16;
 /// Candidate-scoring implementation override.
 ///
@@ -79,7 +79,16 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
 
     let use_fft = match strategy {
         ScoringStrategy::Auto => {
-            domain.transform_plan().is_some() && use_butterfly_fft(domain.len(), candidates.len())
+            domain.transform_plan().is_some()
+                && crate::cost::select_scoring(crate::cost::ScoringCostKey {
+                    points: domain.len(),
+                    candidates: candidates.len(),
+                    total_coefficients: candidates
+                        .iter()
+                        .map(Polynomial::coefficient_count)
+                        .sum(),
+                    backend: crate::cost::BackendClass::detect::<F>(),
+                }) == crate::cost::ScoringBackend::ButterflyFft
         }
         #[cfg(feature = "internals")]
         ScoringStrategy::Horner => false,
@@ -98,17 +107,6 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
             output,
         )
     }
-}
-
-fn use_butterfly_fft(points: usize, candidates: usize) -> bool {
-    let crossover = match candidates {
-        0 | 1 => BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER,
-        2 | 3 => BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER,
-        4..=7 => BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER,
-        8..=15 => BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER,
-        _ => BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER,
-    };
-    points >= crossover
 }
 
 fn score_horner<F: ButterflyKernels>(
