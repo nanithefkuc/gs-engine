@@ -13,7 +13,16 @@ releases follow [Semantic Versioning](https://semver.org/).
   oracle for that problem, sharing monomial/constraint enumeration with the
   uniform reference backend and validating every per-point lower set. The
   existing Kötter and weak-Popov module backends remain differential oracles
-  for the uniform case.
+- Fast Kötter–Nielsen–Høholdt interpolation under `internals`: a
+  transformation-matrix KNH backend (`interpolate_fast_knh`,
+  `interpolate_fast_knh_into`, `FastKnhScratch`) records the per-point
+  elementary updates in an explicit polynomial-matrix transform and applies it
+  to the identity basis at the end. It satisfies every Hasse constraint and
+  matches the Kötter and module backends on the uniform problem. The classical
+  Kötter and weak-Popov paths are retained below the measured crossover; the
+  divide-and-conquer combine (`T₂·T₁` via polynomial-matrix multiplication over
+  a product tree of vanishing polynomials) is scaffolded for the
+  asymptotic speedup.
 - External decoder comparison harness: a standalone controller crate
   (`external-bench/controller`) drives separate-process adapters over a frozen
   `.gsf` fixture corpus with a `.gso` result protocol, field-isomorphism

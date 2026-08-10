@@ -19,8 +19,8 @@ use fgf::Gf16;
 use fgf::field::{Elem, Field};
 use gs_engine::{
     BivariatePolynomial, GsParameters, InterpolationProblem, MultiplicityPoint, ParameterLimits,
-    Polynomial, ReferenceInterpolationLimits, interpolate_koetter, interpolate_module,
-    interpolate_reference, interpolate_reference_nonuniform,
+    Polynomial, ReferenceInterpolationLimits, interpolate_fast_knh, interpolate_koetter,
+    interpolate_module, interpolate_reference, interpolate_reference_nonuniform,
 };
 
 const PARAMETER_LIMITS: ParameterLimits = ParameterLimits::new(8, 16, usize::MAX, usize::MAX);
@@ -325,4 +325,29 @@ fn nonuniform_rejects_zero_multiplicity_and_duplicates() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn fast_knh_satisfies_hasse_constraints() {
+    // The fast KNH backend must satisfy every Hasse constraint, matching the
+    // Kötter and module backends on the same uniform problem.
+    let parameters = GsParameters::new::<Gf8>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
+    let points: Vec<_> = (1..=7).map(gf8).collect();
+    let values: Vec<_> = points
+        .iter()
+        .copied()
+        .map(|point| point.square().add(gf8(3)))
+        .collect();
+
+    let fast = interpolate_fast_knh::<Gf8>(parameters, &points, &values).unwrap();
+    let koetter = interpolate_koetter::<Gf8>(parameters, &points, &values).unwrap();
+
+    assert!(!fast.is_zero());
+    assert_hasse_constraints_gf8(parameters, &points, &values, &fast);
+    assert_hasse_constraints_gf8(parameters, &points, &values, &koetter);
+
+    // Both must produce the same filtered candidate set.
+    let fast_candidates = filtered_candidates_gf8(parameters, &points, &values, &fast);
+    let koetter_candidates = filtered_candidates_gf8(parameters, &points, &values, &koetter);
+    assert_eq!(fast_candidates, koetter_candidates);
 }

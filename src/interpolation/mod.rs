@@ -1,9 +1,13 @@
 //! Guruswami–Sudan interpolation backends.
 
+#[cfg(feature = "internals")]
+mod fast_knh;
 mod koetter;
 mod module;
 mod plan;
 
+#[cfg(feature = "internals")]
+pub use fast_knh::{FastKnhScratch, interpolate_fast_knh, interpolate_fast_knh_into};
 pub use koetter::{
     KoetterScratch, interpolate_koetter, interpolate_koetter_into, interpolate_koetter_with_scratch,
 };
@@ -238,6 +242,20 @@ impl From<butterfly_fft::error::TransformLengthError> for InterpolationError {
         Self::Transform(error)
     }
 }
+impl From<crate::poly::PolynomialError> for InterpolationError {
+    fn from(error: crate::poly::PolynomialError) -> Self {
+        use crate::poly::PolynomialError;
+        match error {
+            PolynomialError::DivisionByZero => Self::InvalidResult {
+                reason: "polynomial division by zero in fast KNH",
+            },
+            PolynomialError::NonExactDivision => Self::InvalidResult {
+                reason: "non-exact polynomial division in fast KNH",
+            },
+            PolynomialError::Config(config) => Self::Config(config),
+        }
+    }
+}
 
 #[cfg(feature = "std")]
 impl std::error::Error for InterpolationError {}
@@ -309,8 +327,7 @@ fn enumerate_monomials(
 pub fn reference_constraints(
     parameters: GsParameters,
 ) -> Result<Vec<InterpolationConstraint>, InterpolationError> {
-    let multiplicities =
-        alloc::vec![parameters.multiplicity(); parameters.code_length()];
+    let multiplicities = alloc::vec![parameters.multiplicity(); parameters.code_length()];
     let constraints = enumerate_constraints(&multiplicities)?;
     if constraints.len() != parameters.resources().constraints() {
         return Err(InterpolationError::InvalidResult {

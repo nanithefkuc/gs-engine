@@ -39,8 +39,9 @@ pub use evaluate::{
 pub use evaluate::{ScoringStrategy, score_candidates_with_strategy};
 #[cfg(feature = "internals")]
 pub use interpolation::{
-    InterpolationConstraint, InterpolationMonomial, InterpolationProblem, MultiplicityPoint,
-    ReferenceInterpolationLimits, interpolate_reference, interpolate_reference_nonuniform,
+    FastKnhScratch, InterpolationConstraint, InterpolationMonomial, InterpolationProblem,
+    MultiplicityPoint, ReferenceInterpolationLimits, interpolate_fast_knh,
+    interpolate_fast_knh_into, interpolate_reference, interpolate_reference_nonuniform,
     reference_constraints, reference_monomials,
 };
 pub use interpolation::{
