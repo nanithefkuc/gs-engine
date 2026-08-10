@@ -1,0 +1,14 @@
+gs-engine-fixture-v1
+name=gf8-arbitrary-7-3-radius-1
+field=gf8
+field-definition=gf2[x]/(x^8+x^4+x^3+x+1);le-polynomial-basis
+domain=arbitrary
+n=7
+k=3
+target-radius=1
+multiplicity=1
+y-degree=1
+weighted-degree=4
+support=00,01,02,03,04,05,06
+received=1f,06,87,9e,bb,b3,32
+expected-candidate=1f,2a,33
