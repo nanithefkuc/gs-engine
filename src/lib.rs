@@ -10,8 +10,8 @@
 
 extern crate alloc;
 
-mod decoder;
 pub mod cost;
+mod decoder;
 pub mod domain;
 mod error;
 mod evaluate;
@@ -22,14 +22,14 @@ pub mod poly;
 pub mod roots;
 mod scratch;
 
-pub use decoder::{DecodeError, GsPlan};
-pub use domain::{DomainError, EvaluationBackend, EvaluationDomain};
-pub use error::ConfigError;
 pub use cost::{
     BackendClass, DomainClass, InterpolationBackend, InterpolationCostKey, ProductBackend,
     ProductCostKey, RootBackend, RootCostKey, ScoringBackend, ScoringCostKey, select_interpolation,
     select_product, select_root, select_scoring,
 };
+pub use decoder::{DecodeError, GsPlan};
+pub use domain::{DomainError, EvaluationBackend, EvaluationDomain};
+pub use error::ConfigError;
 pub use evaluate::{
     BUTTERFLY_FFT_BATCH2_SCORING_CROSSOVER, BUTTERFLY_FFT_BATCH4_SCORING_CROSSOVER,
     BUTTERFLY_FFT_BATCH8_SCORING_CROSSOVER, BUTTERFLY_FFT_BATCH16_SCORING_CROSSOVER,
@@ -39,8 +39,9 @@ pub use evaluate::{
 pub use evaluate::{ScoringStrategy, score_candidates_with_strategy};
 #[cfg(feature = "internals")]
 pub use interpolation::{
-    InterpolationConstraint, InterpolationMonomial, ReferenceInterpolationLimits,
-    interpolate_reference, reference_constraints, reference_monomials,
+    InterpolationConstraint, InterpolationMonomial, InterpolationProblem, MultiplicityPoint,
+    ReferenceInterpolationLimits, interpolate_reference, interpolate_reference_nonuniform,
+    reference_constraints, reference_monomials,
 };
 pub use interpolation::{
     InterpolationError, InterpolationPlan, KoetterScratch, MODULE_INTERPOLATION_CROSSOVER,

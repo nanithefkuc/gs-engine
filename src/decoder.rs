@@ -208,16 +208,17 @@ impl<F: ButterflyKernels> GsPlan<F> {
             });
         }
 
-        let interpolation_backend = crate::cost::select_interpolation(crate::cost::InterpolationCostKey {
-            field_bytes: F::BYTES,
-            backend: crate::cost::BackendClass::detect::<F>(),
-            domain: self.domain.backend().into(),
-            points: self.parameters.code_length(),
-            multiplicity: self.parameters.multiplicity(),
-            y_degree: self.parameters.y_degree(),
-            weighted_degree: self.parameters.weighted_degree(),
-            prepared: self.domain.transform_plan().is_some(),
-        });
+        let interpolation_backend =
+            crate::cost::select_interpolation(crate::cost::InterpolationCostKey {
+                field_bytes: F::BYTES,
+                backend: crate::cost::BackendClass::detect::<F>(),
+                domain: self.domain.backend().into(),
+                points: self.parameters.code_length(),
+                multiplicity: self.parameters.multiplicity(),
+                y_degree: self.parameters.y_degree(),
+                weighted_degree: self.parameters.weighted_degree(),
+                prepared: self.domain.transform_plan().is_some(),
+            });
         let interpolation = if interpolation_backend == crate::cost::InterpolationBackend::Module {
             interpolate_module_into::<F>(
                 self.parameters,

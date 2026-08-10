@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
 
 ### Added
+- Nonuniform-multiplicity interpolation problem under `internals`: new
+  `MultiplicityPoint` and `InterpolationProblem` types carry a per-point
+  multiplicity, the lower set a fast Kötter–Nielsen–Høholdt backend consumes
+  directly. `interpolate_reference_nonuniform` is the explicit Hasse-matrix
+  oracle for that problem, sharing monomial/constraint enumeration with the
+  uniform reference backend and validating every per-point lower set. The
+  existing Kötter and weak-Popov module backends remain differential oracles
+  for the uniform case.
 - External decoder comparison harness: a standalone controller crate
   (`external-bench/controller`) drives separate-process adapters over a frozen
   `.gsf` fixture corpus with a `.gso` result protocol, field-isomorphism

@@ -83,10 +83,7 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
                 && crate::cost::select_scoring(crate::cost::ScoringCostKey {
                     points: domain.len(),
                     candidates: candidates.len(),
-                    total_coefficients: candidates
-                        .iter()
-                        .map(Polynomial::coefficient_count)
-                        .sum(),
+                    total_coefficients: candidates.iter().map(Polynomial::coefficient_count).sum(),
                     backend: crate::cost::BackendClass::detect::<F>(),
                 }) == crate::cost::ScoringBackend::ButterflyFft
         }

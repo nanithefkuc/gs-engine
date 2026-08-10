@@ -562,7 +562,8 @@ fn estimate_resources<F: FieldKernels>(
     let row_bytes =
         checked_product_to_usize("interpolation basis row bytes", row_elements, F::BYTES)?;
     let vector_blocks = row_bytes.div_ceil(lane_bytes);
-    let interpolation_work = crate::cost::interpolation_work(constraints, basis_rows, vector_blocks);
+    let interpolation_work =
+        crate::cost::interpolation_work(constraints, basis_rows, vector_blocks);
     let root_work = crate::cost::root_work(max_degree, basis_rows, multiplicity);
     let estimated_work = interpolation_work.saturating_add(root_work);
 

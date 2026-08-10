@@ -57,7 +57,10 @@ struct Case<'a, F: fgf::kernel::FieldKernels> {
     received: Vec<F::Elem>,
 }
 
-fn render<F: fgf::kernel::FieldKernels>(case: &Case<'_, F>, candidates: &[Polynomial<F>]) -> String {
+fn render<F: fgf::kernel::FieldKernels>(
+    case: &Case<'_, F>,
+    candidates: &[Polynomial<F>],
+) -> String {
     let mut out = String::new();
     writeln!(out, "gs-engine-fixture-v1").unwrap();
     writeln!(out, "name={}", case.name).unwrap();
@@ -74,7 +77,12 @@ fn render<F: fgf::kernel::FieldKernels>(case: &Case<'_, F>, candidates: &[Polyno
     writeln!(out, "received={}", encode_elements::<F>(&case.received)).unwrap();
     for candidate in candidates {
         let coefficients: Vec<_> = candidate.coefficients().collect();
-        writeln!(out, "expected-candidate={}", encode_elements::<F>(&coefficients)).unwrap();
+        writeln!(
+            out,
+            "expected-candidate={}",
+            encode_elements::<F>(&coefficients)
+        )
+        .unwrap();
     }
     out
 }
@@ -96,7 +104,11 @@ fn decode_sorted<F: FieldKernels + ButterflyKernels>(
     candidates
 }
 
-fn emit<F: FieldKernels + ButterflyKernels>(dir: &Path, case: Case<'_, F>, domain: &EvaluationDomain<F>) {
+fn emit<F: FieldKernels + ButterflyKernels>(
+    dir: &Path,
+    case: Case<'_, F>,
+    domain: &EvaluationDomain<F>,
+) {
     let candidates = decode_sorted::<F>(case.parameters, domain, &case.received);
     let rendered = render::<F>(&case, &candidates);
     let path = dir.join(format!("{}.gsf", case.name));
@@ -210,7 +222,11 @@ fn gf16_arbitrary_radius4(dir: &Path) {
         element::<Gf16>(0xace0),
     ])
     .unwrap();
-    let received = corrupt::<Gf16>(&message, &points, &[(2, 0x3), (6, 0x5), (11, 0x9), (14, 0x2)]);
+    let received = corrupt::<Gf16>(
+        &message,
+        &points,
+        &[(2, 0x3), (6, 0x5), (11, 0x9), (14, 0x2)],
+    );
     let domain = EvaluationDomain::arbitrary(points).unwrap();
     emit::<Gf16>(
         dir,
