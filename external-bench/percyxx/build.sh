@@ -14,11 +14,20 @@ git -C "$source_dir" fetch --depth 1 origin "$revision"
 git -C "$source_dir" checkout --detach "$revision"
 
 ntl_include=${NTL_INCLUDE:-/usr/include}
-cxxflags=${CXXFLAGS:--O3 -DNDEBUG -Wall -Wextra -std=c++11}
+cxxflags=${CXXFLAGS:--O3 -DNDEBUG -fpermissive -std=c++11}
+
+# The upstream Makefile hardcodes NTL under /usr/local/include; retarget its
+# header-dependency prerequisites and include flags to the detected prefix.
+sed -i "s#/usr/local/include/NTL#$ntl_include/NTL#g" "$source_dir/Makefile"
+
+# Modern libstdc++ requires an associative-container comparator's call operator
+# to be const; the 2013-era decoder declares it non-const.
+sed -i 's/const FX& b) {/const FX\& b) const {/' "$source_dir/rsdecoder_impl.h"
+
 make -C "$source_dir" \
-    CXXFLAGS="$cxxflags -I$ntl_include" \
+    CXXFLAGS="$cxxflags -I$ntl_include/NTL" \
     libpercyclient.a
 
 printf '%s\n' "percyxx_revision=$revision"
-printf '%s\n' "percyxx_cxxflags=$cxxflags -I$ntl_include"
+printf '%s\n' "percyxx_cxxflags=$cxxflags -I$ntl_include/NTL"
 printf '%s\n' "percyxx_artifact=$source_dir/libpercyclient.a"

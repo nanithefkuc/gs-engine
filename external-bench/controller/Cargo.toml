@@ -1,0 +1,20 @@
+[package]
+name = "gs-external-bench"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Controller for cross-library Guruswami-Sudan comparison; drives separate-process adapters over the canonical .gsf corpus"
+license = "MIT"
+publish = false
+
+# Standalone workspace: kept out of the gs-engine crate so GPL adapter builds
+# and external sources never enter the published crate's dependency graph.
+[workspace]
+
+[dependencies]
+gs-engine = { path = "../.." }
+fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd" }
+
+[[bin]]
+name = "gs-external-bench"
+path = "src/main.rs"
