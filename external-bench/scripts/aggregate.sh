@@ -42,7 +42,7 @@ cargo build --release --manifest-path "$controller/Cargo.toml" >/dev/null 2>&1
     cargo run --release --manifest-path "$controller/Cargo.toml" -- validate "$fixtures" 2>&1 || true
     echo
 
-    for adapter in decoding/decoding-gs lambdaworks/lambdaworks-gs; do
+    for adapter in decoding/decoding-gs percyxx/percyxx-gs lambdaworks/lambdaworks-gs; do
         exe=$crate_dir/external-bench/$adapter
         printf '%s\n' "=== adapter: $adapter ==="
         if [ -x "$exe" ]; then
