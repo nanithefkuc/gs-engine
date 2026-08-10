@@ -37,8 +37,9 @@ pub use interpolation::{
     interpolate_reference, reference_constraints, reference_monomials,
 };
 pub use interpolation::{
-    InterpolationError, KoetterScratch, MODULE_INTERPOLATION_CROSSOVER, interpolate_koetter,
-    interpolate_koetter_into, interpolate_koetter_with_scratch, interpolate_module,
+    InterpolationError, InterpolationPlan, KoetterScratch, MODULE_INTERPOLATION_CROSSOVER,
+    ModuleScratch, interpolate_koetter, interpolate_koetter_into, interpolate_koetter_with_scratch,
+    interpolate_module, interpolate_module_into,
 };
 pub use params::{GsParameters, ParameterLimits, ResourceEstimate};
 pub use poly::{

@@ -59,10 +59,22 @@ impl std::error::Error for PolynomialError {}
 /// fixed-scalar operations can execute directly through `fgf` without unsafe
 /// casts or representation copies. Zero is represented by an empty buffer;
 /// every nonzero value ends in a nonzero coefficient.
-#[derive(Clone)]
 pub struct Polynomial<F: FieldKernels> {
     coefficients: Vec<u8>,
     field: PhantomData<F>,
+}
+
+impl<F: FieldKernels> Clone for Polynomial<F> {
+    fn clone(&self) -> Self {
+        Self {
+            coefficients: self.coefficients.clone(),
+            field: PhantomData,
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.coefficients.clone_from(&source.coefficients);
+    }
 }
 
 impl<F: FieldKernels> Polynomial<F> {
@@ -214,6 +226,10 @@ impl<F: FieldKernels> Polynomial<F> {
             self.coefficients.resize(byte_len, 0);
         }
         Ok(())
+    }
+
+    pub(crate) fn retained_capacity_bytes(&self) -> usize {
+        self.coefficients.capacity()
     }
 
     pub(crate) fn normalize(&mut self) {

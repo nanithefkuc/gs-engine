@@ -2,11 +2,15 @@
 
 mod koetter;
 mod module;
+mod plan;
 
 pub use koetter::{
     KoetterScratch, interpolate_koetter, interpolate_koetter_into, interpolate_koetter_with_scratch,
 };
-pub use module::{MODULE_INTERPOLATION_CROSSOVER, interpolate_module};
+pub use module::{
+    MODULE_INTERPOLATION_CROSSOVER, ModuleScratch, interpolate_module, interpolate_module_into,
+};
+pub use plan::InterpolationPlan;
 
 #[cfg(feature = "internals")]
 use alloc::vec::Vec;

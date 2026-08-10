@@ -23,9 +23,21 @@ pub struct WeightedTerm {
 }
 
 /// A bivariate polynomial `Q(X,Y) = sum_j Q_j(X) Y^j`.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct BivariatePolynomial<F: FieldKernels> {
     y_coefficients: Vec<Polynomial<F>>,
+}
+
+impl<F: FieldKernels> Clone for BivariatePolynomial<F> {
+    fn clone(&self) -> Self {
+        Self {
+            y_coefficients: self.y_coefficients.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.y_coefficients.clone_from(&source.y_coefficients);
+    }
 }
 
 impl<F: FieldKernels> BivariatePolynomial<F> {
@@ -482,17 +494,30 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
         Ok(result)
     }
 
-    pub(crate) fn add_scaled_x_shifted_assign(
+    pub(crate) fn add_scaled_x_shifted_assign_pooled(
         &mut self,
         scale: F::Elem,
         other: &Self,
         x_shift: usize,
+        pool: &mut Vec<Polynomial<F>>,
     ) -> Result<(), ConfigError> {
-        self.prepare_y_rows(self.y_coefficient_count().max(other.y_coefficient_count()))?;
+        let count = self.y_coefficient_count().max(other.y_coefficient_count());
+        if count > self.y_coefficients.len() {
+            self.y_coefficients
+                .try_reserve(count - self.y_coefficients.len())
+                .map_err(|_| ConfigError::AllocationFailed {
+                    context: "bivariate Y coefficients",
+                    elements: count,
+                    element_size: core::mem::size_of::<Polynomial<F>>(),
+                })?;
+            while self.y_coefficients.len() < count {
+                self.y_coefficients.push(pool.pop().unwrap_or_default());
+            }
+        }
         for (target, source) in self.y_coefficients.iter_mut().zip(&other.y_coefficients) {
             target.add_scaled_shifted_assign(scale, source, x_shift)?;
         }
-        self.normalize();
+        self.normalize_pooled(pool);
         Ok(())
     }
 
@@ -503,6 +528,154 @@ impl<F: FieldKernels> BivariatePolynomial<F> {
 
     pub(crate) fn normalize(&mut self) {
         normalize_y_coefficients(&mut self.y_coefficients);
+    }
+
+    pub(crate) fn try_assign_from(&mut self, source: &Self) -> Result<(), ConfigError> {
+        let count = source.y_coefficients.len();
+        if self.y_coefficients.capacity() < count {
+            self.y_coefficients
+                .try_reserve(count - self.y_coefficients.len())
+                .map_err(|_| ConfigError::AllocationFailed {
+                    context: "bivariate Y coefficients",
+                    elements: count,
+                    element_size: core::mem::size_of::<Polynomial<F>>(),
+                })?;
+        }
+        while self.y_coefficients.len() < count {
+            self.y_coefficients.push(Polynomial::zero());
+        }
+        self.y_coefficients.truncate(count);
+        for (target, coefficient) in self.y_coefficients.iter_mut().zip(&source.y_coefficients) {
+            target.assign_packed(coefficient.as_packed())?;
+        }
+        Ok(())
+    }
+
+    /// Ensure exactly `count` zeroed `Y` rows, recycling spare rows through a
+    /// pool so warmed reuse performs no per-row allocation.
+    pub(crate) fn resize_and_zero_rows(
+        &mut self,
+        count: usize,
+        pool: &mut Vec<Polynomial<F>>,
+    ) -> Result<(), ConfigError> {
+        while self.y_coefficients.len() > count {
+            let mut row = self.y_coefficients.pop().expect("nonempty rows");
+            row.set_zero();
+            pool.push(row);
+        }
+        if count > self.y_coefficients.len() {
+            self.y_coefficients
+                .try_reserve(count - self.y_coefficients.len())
+                .map_err(|_| ConfigError::AllocationFailed {
+                    context: "bivariate Y coefficients",
+                    elements: count,
+                    element_size: core::mem::size_of::<Polynomial<F>>(),
+                })?;
+            while self.y_coefficients.len() < count {
+                self.y_coefficients.push(pool.pop().unwrap_or_default());
+            }
+        }
+        for row in &mut self.y_coefficients {
+            row.set_zero();
+        }
+        Ok(())
+    }
+
+    /// Drop trailing zero rows into the pool, restoring the normalized invariant
+    /// without freeing row buffers.
+    pub(crate) fn normalize_pooled(&mut self, pool: &mut Vec<Polynomial<F>>) {
+        while self.y_coefficients.last().is_some_and(Polynomial::is_zero) {
+            let mut row = self.y_coefficients.pop().expect("nonempty rows");
+            row.set_zero();
+            pool.push(row);
+        }
+    }
+
+    /// Substitute `Y = constant + X*Z` into reusable, pool-backed storage.
+    pub(crate) fn substitute_y_linear_into(
+        &self,
+        constant: F::Elem,
+        powers: &mut Vec<F::Elem>,
+        pool: &mut Vec<Polynomial<F>>,
+        out: &mut Self,
+    ) -> Result<(), ConfigError> {
+        let Some(y_degree) = self.y_degree() else {
+            out.resize_and_zero_rows(0, pool)?;
+            return Ok(());
+        };
+        let count = y_degree
+            .checked_add(1)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "bivariate substitution rows",
+            })?;
+        if powers.len() < count {
+            powers.try_reserve(count - powers.len()).map_err(|_| {
+                ConfigError::AllocationFailed {
+                    context: "bivariate substitution powers",
+                    elements: count,
+                    element_size: core::mem::size_of::<F::Elem>(),
+                }
+            })?;
+            powers.resize(count, F::Elem::ZERO);
+        }
+        powers[0] = F::Elem::ONE;
+        for exponent in 1..count {
+            powers[exponent] = powers[exponent - 1].mul(constant);
+        }
+        out.resize_and_zero_rows(count, pool)?;
+        for (source_y, coefficient) in self.y_coefficients.iter().enumerate() {
+            if coefficient.is_zero() {
+                continue;
+            }
+            for target_y in 0..=source_y {
+                if !binomial_odd(source_y, target_y) {
+                    continue;
+                }
+                let scale = powers[source_y - target_y];
+                if scale.is_zero() {
+                    continue;
+                }
+                out.y_coefficients[target_y].add_scaled_shifted_assign(
+                    scale,
+                    coefficient,
+                    target_y,
+                )?;
+            }
+        }
+        out.normalize_pooled(pool);
+        Ok(())
+    }
+
+    /// Divide every coefficient row exactly by `X^power` into pool-backed storage.
+    pub(crate) fn divide_by_x_power_into(
+        &self,
+        power: usize,
+        pool: &mut Vec<Polynomial<F>>,
+        out: &mut Self,
+    ) -> Result<(), PolynomialError> {
+        out.resize_and_zero_rows(self.y_coefficients.len(), pool)?;
+        for (row, coefficient) in out.y_coefficients.iter_mut().zip(&self.y_coefficients) {
+            coefficient.divide_by_x_power_into(power, row)?;
+        }
+        out.normalize_pooled(pool);
+        Ok(())
+    }
+
+    /// Evaluate `Q(X, candidate(X))` into reusable storage using `product` as
+    /// multiplication scratch, returning whether the composition is zero.
+    pub(crate) fn has_root_with(
+        &self,
+        candidate: &Polynomial<F>,
+        accumulator: &mut Polynomial<F>,
+        product: &mut Polynomial<F>,
+    ) -> Result<bool, ConfigError> {
+        accumulator.set_zero();
+        for coefficient in self.y_coefficients.iter().rev() {
+            accumulator.multiply_into(candidate, product)?;
+            core::mem::swap(accumulator, product);
+            accumulator.add_assign(coefficient)?;
+        }
+        Ok(accumulator.is_zero())
     }
 }
 
