@@ -4,7 +4,7 @@ use gs_engine::{
     BivariatePolynomial, GsParameters, ParameterLimits, Polynomial, interpolate_koetter,
     interpolate_module,
 };
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 use gs_engine::{
     InterpolationConstraint, InterpolationError, InterpolationMonomial,
     ReferenceInterpolationLimits, interpolate_reference, reference_constraints,
@@ -46,7 +46,7 @@ fn assert_hasse_constraints<F: fgf::kernel::FieldKernels>(
     }
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 #[test]
 fn monomial_and_constraint_orders_are_exact() {
     let parameters = GsParameters::new::<Gf16>(15, 4, 6, 2, 3, 17, PARAMETER_LIMITS).unwrap();
@@ -106,7 +106,7 @@ fn monomial_and_constraint_orders_are_exact() {
     assert_eq!(constraints.last().unwrap().point_index, 14);
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 #[test]
 fn reference_interpolation_recovers_the_guaranteed_root() {
     let parameters = GsParameters::new::<Gf16>(15, 4, 6, 2, 3, 17, PARAMETER_LIMITS).unwrap();
@@ -150,7 +150,7 @@ fn reference_interpolation_recovers_the_guaranteed_root() {
     }
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 #[test]
 fn reference_interpolation_works_over_gf8() {
     let parameters = GsParameters::new::<Gf8>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
@@ -244,7 +244,7 @@ fn high_multiplicity_koetter_jets_match_module_constraints() {
     assert!(module.has_root(&message).unwrap());
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 #[test]
 fn reference_and_koetter_yield_the_same_filtered_candidates() {
     let parameters = GsParameters::new::<Gf8>(5, 0, 2, 1, 1, 2, PARAMETER_LIMITS).unwrap();
@@ -287,7 +287,7 @@ fn reference_and_koetter_yield_the_same_filtered_candidates() {
     assert_eq!(optimized_candidates, reference_candidates);
 }
 
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 #[test]
 fn reference_limits_and_inputs_fail_before_solving() {
     let parameters = GsParameters::new::<Gf16>(15, 4, 6, 2, 3, 17, PARAMETER_LIMITS).unwrap();

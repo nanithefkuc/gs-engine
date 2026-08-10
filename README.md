@@ -1,3 +1,8 @@
+> [!WARNING]
+> This library was made with the help of AI. While the library has tests
+> to check for regressions, things may break. Audit the code yourself, or with
+> your own agent before using.
+
 # gs-engine
 
 Reusable Guruswami–Sudan list decoding for Reed–Solomon evaluation codes.
@@ -7,8 +12,8 @@ polynomial root extraction, and Hamming-radius filtering. It is `no_std` with
 
 ## Supported fields
 
-The production decoder is validated for the binary extension fields `fff::Gf8`
-and `fff::Gf16`. Generic APIs require the corresponding `fff::FieldKernels` or
+The production decoder is validated for the binary extension fields `fgf::Gf8`
+and `fgf::Gf16`. Generic APIs require the corresponding `fgf::FieldKernels` or
 `cafft::ButterflyKernels` implementation. Root splitting rejects fields whose
 order is not a power of two or whose stable element representation exceeds 16
 bytes; it never falls back to scanning the full field.
@@ -57,20 +62,20 @@ allocation.
 
 ## Features
 
-- `std` enables standard-library error integration and CAFFT/FFF standard
+- `std` enables standard-library error integration and CAFFT/FGF standard
   support.
 - `simd` enables runtime-selected SIMD kernels and implies `std`.
-- `diagnostic` exposes the explicit reference interpolation matrix backend and
-  its monomial/constraint helpers. It is excluded from normal production
-  builds.
+- `internals` exposes unstable implementation APIs for benchmarking and
+  research — the explicit reference interpolation matrix backend and its
+  monomial/constraint helpers. Exempt from compatibility guarantees.
 
 Default features are `std` and `simd`.
 
 ## Minimal use
 
 ```rust,no_run
-use fff::Gf16;
-use fff::field::{Elem, Field};
+use fgf::Gf16;
+use fgf::field::{Elem, Field};
 use gs_engine::{
     AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan,
     ParameterLimits,
@@ -99,20 +104,20 @@ The primary decoding API is `GsPlan::decode_into(received, scratch, output)`.
 
 ## Benchmarks and crossover policy
 
-Each benchmark prints the field and the runtime-selected FFF backend. Run the
+Each benchmark prints the field and the runtime-selected FGF backend. Run the
 matrix explicitly with:
 
 ```text
-FFF_BACKEND=scalar cargo bench --bench interpolation
-FFF_BACKEND=gfni  cargo bench --bench interpolation
-FFF_BACKEND=scalar cargo bench --bench products
-FFF_BACKEND=gfni  cargo bench --bench products
-FFF_BACKEND=scalar cargo bench --bench root_extraction
-FFF_BACKEND=gfni  cargo bench --bench root_extraction
-FFF_BACKEND=scalar cargo bench --bench scoring
-FFF_BACKEND=gfni  cargo bench --bench scoring
-FFF_BACKEND=scalar cargo bench --bench decoder
-FFF_BACKEND=gfni  cargo bench --bench decoder
+SIMD_BACKEND=scalar cargo bench --bench interpolation
+SIMD_BACKEND=gfni  cargo bench --bench interpolation
+SIMD_BACKEND=scalar cargo bench --bench products
+SIMD_BACKEND=gfni  cargo bench --bench products
+SIMD_BACKEND=scalar cargo bench --bench root_extraction
+SIMD_BACKEND=gfni  cargo bench --bench root_extraction
+SIMD_BACKEND=scalar cargo bench --bench scoring
+SIMD_BACKEND=gfni  cargo bench --bench scoring
+SIMD_BACKEND=scalar cargo bench --bench decoder
+SIMD_BACKEND=gfni  cargo bench --bench decoder
 ```
 
 `gfni` requests fall back to a supported backend on hosts that cannot execute
@@ -139,6 +144,15 @@ field-sized transform ceiling. `ProductStrategy::Auto` and the default root
 crossover inspect the selected backend. An explicit product strategy or
 `with_roth_ruckenstein_crossover` override remains backend-independent.
 
-Packed AXPY is selected by `fff` from the active backend and row width; scalar
+Packed AXPY is selected by `fgf` from the active backend and row width; scalar
 fallback remains bit-exact and is continuously checked against the selected
 backend.
+
+
+## Minimum supported Rust version
+
+1.89, edition 2024. An MSRV bump is a minor-version change.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

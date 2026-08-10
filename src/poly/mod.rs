@@ -1,4 +1,4 @@
-//! Dense univariate and bivariate polynomials over `fff` fields.
+//! Dense univariate and bivariate polynomials over `fgf` fields.
 
 mod afft;
 mod arithmetic;
@@ -56,7 +56,7 @@ impl std::error::Error for PolynomialError {}
 /// A normalized dense monomial-basis polynomial.
 ///
 /// Coefficients use the field's packed little-endian representation, so wide
-/// fixed-scalar operations can execute directly through `fff` without unsafe
+/// fixed-scalar operations can execute directly through `fgf` without unsafe
 /// casts or representation copies. Zero is represented by an empty buffer;
 /// every nonzero value ends in a nonzero coefficient.
 #[derive(Clone)]

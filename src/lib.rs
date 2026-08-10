@@ -28,7 +28,7 @@ pub use evaluate::{
     CAFFT_BATCH2_SCORING_CROSSOVER, CAFFT_BATCH4_SCORING_CROSSOVER, CAFFT_BATCH8_SCORING_CROSSOVER,
     CAFFT_BATCH16_SCORING_CROSSOVER, CAFFT_SINGLE_SCORING_CROSSOVER,
 };
-#[cfg(feature = "diagnostic")]
+#[cfg(feature = "internals")]
 pub use interpolation::{
     InterpolationConstraint, InterpolationMonomial, ReferenceInterpolationLimits,
     interpolate_reference, reference_constraints, reference_monomials,

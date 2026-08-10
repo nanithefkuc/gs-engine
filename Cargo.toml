@@ -11,7 +11,9 @@ repository = "https://github.com/nanithefkuc/gs-engine"
 default = ["std", "simd"]
 std = ["fgf/std", "cafft/std", "gfm/std"]
 simd = ["std", "fgf/simd", "cafft/simd", "gfm/simd"]
-diagnostic = []
+# Unstable implementation APIs for benchmarking and downstream
+# experimentation. Exempt from compatibility guarantees.
+internals = []
 
 [[bench]]
 name = "root_extraction"

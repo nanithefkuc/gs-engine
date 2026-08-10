@@ -219,7 +219,7 @@ impl GsParameters {
     ///
     /// For each `(s, ell)`, search chooses the smallest `D` with sufficient
     /// interpolation monomials. Candidates are ordered by a deterministic work
-    /// score based on the active FFF backend's SIMD lane width, then by storage,
+    /// score based on the active FGF backend's SIMD lane width, then by storage,
     /// `Y`-degree, multiplicity, and weighted degree.
     pub fn search<F: FieldKernels>(
         code_length: usize,

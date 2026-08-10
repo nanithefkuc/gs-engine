@@ -152,7 +152,7 @@ impl<F: ButterflyKernels> Default for PolynomialProductScratch<F> {
 /// and write them to caller-owned output storage.
 ///
 /// AFFT packs every left/right operand across byte-row columns, performs one
-/// pair of forward transforms, uses FFF elementwise multiplication per point,
+/// pair of forward transforms, uses FGF elementwise multiplication per point,
 /// and inverse-transforms all products as a second packed batch.
 pub fn multiply_batch_truncated<F: ButterflyKernels>(
     pairs: &[(&Polynomial<F>, &Polynomial<F>)],
