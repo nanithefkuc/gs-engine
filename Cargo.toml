@@ -37,9 +37,9 @@ name = "interpolation"
 harness = false
 
 [dependencies]
-butterfly-fft = { path = "../butterfly-fft", default-features = false }
+butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
 fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
-gfm = { path = "../gfm", default-features = false }
+gfm = { git = "https://github.com/nanithefkuc/gfm", rev = "184b264f0f433b7365a8180378b3f3e99c1417bf", default-features = false }
 
 
 [dev-dependencies]
