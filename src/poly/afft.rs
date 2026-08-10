@@ -7,56 +7,35 @@ use butterfly_fft::basis::{
 use butterfly_fft::core::kernel::ButterflyKernels;
 use butterfly_fft::core::transform::TransformPlan;
 use butterfly_fft::error::{PlanError, TransformLengthError};
-use fgf::kernel::{Backend, backend_for};
 use fgf::ops;
 
 use crate::ConfigError;
 
 use super::Polynomial;
 
-/// Packed-kernel full-product threshold for a single product.
-///
-/// Packed GFNI schoolbook multiplication remained ahead over the full GF16
-/// transform range, so automatic selection does not choose AFFT for this lane count.
+/// AFFT product crossover in full-product coefficients, one to three packed products. See `BENCHMARKS.md`.
 pub const AFFT_PRODUCT_CROSSOVER: usize = usize::MAX;
 
-/// Packed-kernel crossover for batches of four to seven products.
+/// AFFT product crossover, four to seven packed products. See `BENCHMARKS.md`.
 pub const AFFT_BATCH4_CROSSOVER: usize = 65_535;
 
-/// Packed-kernel crossover for batches of eight to fifteen products.
+/// AFFT product crossover, eight to fifteen packed products. See `BENCHMARKS.md`.
 pub const AFFT_BATCH8_CROSSOVER: usize = 32_767;
 
-/// Packed-kernel crossover for batches of at least sixteen products.
+/// AFFT product crossover, sixteen or more packed products. See `BENCHMARKS.md`.
 pub const AFFT_BATCH16_CROSSOVER: usize = 8_191;
 
-/// Scalar-kernel crossover for one to three products.
+/// AFFT product crossover, one to three scalar products. See `BENCHMARKS.md`.
 pub const SCALAR_AFFT_PRODUCT_CROSSOVER: usize = 511;
 
-/// Scalar-kernel crossover for batches of four to seven products.
+/// AFFT product crossover, four to seven scalar products. See `BENCHMARKS.md`.
 pub const SCALAR_AFFT_BATCH4_CROSSOVER: usize = 255;
 
-/// Scalar-kernel crossover for batches of eight to fifteen products.
+/// AFFT product crossover, eight to fifteen scalar products. See `BENCHMARKS.md`.
 pub const SCALAR_AFFT_BATCH8_CROSSOVER: usize = 255;
 
-/// Scalar-kernel crossover for batches of at least sixteen products.
+/// AFFT product crossover, sixteen or more scalar products. See `BENCHMARKS.md`.
 pub const SCALAR_AFFT_BATCH16_CROSSOVER: usize = 127;
-
-fn auto_crossover<F: ButterflyKernels>(pair_count: usize) -> usize {
-    if F::ORDER <= 256 {
-        return usize::MAX;
-    }
-    let scalar = backend_for::<F>() == Backend::Scalar;
-    match (scalar, pair_count) {
-        (true, 0..=3) => SCALAR_AFFT_PRODUCT_CROSSOVER,
-        (true, 4..=7) => SCALAR_AFFT_BATCH4_CROSSOVER,
-        (true, 8..=15) => SCALAR_AFFT_BATCH8_CROSSOVER,
-        (true, _) => SCALAR_AFFT_BATCH16_CROSSOVER,
-        (false, 0..=3) => AFFT_PRODUCT_CROSSOVER,
-        (false, 4..=7) => AFFT_BATCH4_CROSSOVER,
-        (false, 8..=15) => AFFT_BATCH8_CROSSOVER,
-        (false, _) => AFFT_BATCH16_CROSSOVER,
-    }
-}
 
 /// Algorithm selection for polynomial product batches.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -197,10 +176,14 @@ where
     }
 
     let mut max_full_count = 0_usize;
+    let mut max_left = 0_usize;
+    let mut max_right = 0_usize;
     for index in 0..pair_count {
         let (left, right) = pair(index);
         let full_count = full_product_count(left, right)?;
         max_full_count = max_full_count.max(full_count);
+        max_left = max_left.max(left.coefficient_count());
+        max_right = max_right.max(right.coefficient_count());
     }
     if max_full_count == 0 || coefficient_count == 0 {
         for polynomial in output {
@@ -213,8 +196,14 @@ where
         ProductStrategy::Schoolbook => false,
         ProductStrategy::Afft => true,
         ProductStrategy::Auto => {
-            let crossover = auto_crossover::<F>(pair_count);
-            max_full_count >= crossover
+            crate::cost::select_product(crate::cost::ProductCostKey {
+                left_coefficients: max_left,
+                right_coefficients: max_right,
+                output_coefficients: max_full_count,
+                batch: pair_count,
+                field_order: F::ORDER,
+                backend: crate::cost::BackendClass::detect::<F>(),
+            }) == crate::cost::ProductBackend::Afft
         }
     };
     let Some(transform_size) = max_full_count.checked_next_power_of_two() else {
