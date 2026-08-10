@@ -83,6 +83,7 @@ fn run_field<F: ButterflyKernels>(
             &points,
             &received,
             &plan,
+            None,
             &mut module_scratch,
             &mut module_output,
         )
@@ -127,6 +128,7 @@ fn run_field<F: ButterflyKernels>(
                         black_box(&points),
                         black_box(&received),
                         &plan,
+                        None,
                         &mut module_scratch,
                         &mut module_output,
                     )
@@ -138,6 +140,93 @@ fn run_field<F: ButterflyKernels>(
     }
 }
 
+fn run_domain<F: ButterflyKernels>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    field: &str,
+) {
+    use gs_engine::{EvaluationDomain, InterpolationPlan};
+
+    for n in [8_usize, 16, 32, 64, 128] {
+        let max_degree = n / 3;
+        let radius = n * 2 / 5;
+        let parameters =
+            GsParameters::search::<F>(n, max_degree, radius, PARAMETER_LIMITS).unwrap();
+
+        for (domain_name, domain) in [
+            (
+                "additive",
+                EvaluationDomain::<F>::additive_subspace(n).unwrap(),
+            ),
+            (
+                "affine",
+                EvaluationDomain::<F>::affine_coset(n, element::<F>(1 << (F::BITS - 1))).unwrap(),
+            ),
+        ] {
+            let points = domain.points();
+            let message = generated_polynomial::<F>(max_degree + 1, 0x1a2b_0000 + n as u64);
+            let mut received = message.evaluate_many(points).unwrap();
+            for (offset, value) in received[n - radius..].iter_mut().enumerate() {
+                *value = value.add(element::<F>((offset + 1) as u64));
+            }
+            let geometry = format!(
+                "{field}/{}/{domain_name}/n{n}/k{}/tau{radius}/s{}/ell{}/D{}",
+                backend_name::<F>(),
+                max_degree + 1,
+                parameters.multiplicity(),
+                parameters.y_degree(),
+                parameters.weighted_degree()
+            );
+            group.throughput(Throughput::Elements(
+                parameters.resources().constraints() as u64
+            ));
+
+            // Plan construction benchmark: Newton vs transform.
+            group.bench_function(BenchmarkId::new("plan-newton", &geometry), |bencher| {
+                bencher
+                    .iter(|| InterpolationPlan::<F>::new(parameters, black_box(points)).unwrap());
+            });
+            group.bench_function(BenchmarkId::new("plan-transform", &geometry), |bencher| {
+                bencher.iter(|| {
+                    InterpolationPlan::<F>::new_with_domain(parameters, black_box(&domain)).unwrap()
+                });
+            });
+
+            // Prepared module interpolation with transform received-word path.
+            let plan = InterpolationPlan::<F>::new_with_domain(parameters, &domain).unwrap();
+            let mut module_scratch = ModuleScratch::new();
+            let mut module_output = BivariatePolynomial::zero();
+            interpolate_module_into(
+                parameters,
+                points,
+                &received,
+                &plan,
+                Some(&domain),
+                &mut module_scratch,
+                &mut module_output,
+            )
+            .unwrap();
+            group.bench_function(
+                BenchmarkId::new("forced-module", format!("{geometry}/prepared-true")),
+                |bencher| {
+                    bencher.iter(|| {
+                        interpolate_module_into(
+                            parameters,
+                            black_box(points),
+                            black_box(&received),
+                            &plan,
+                            Some(&domain),
+                            &mut module_scratch,
+                            &mut module_output,
+                        )
+                        .unwrap();
+                        black_box(&module_output);
+                    });
+                },
+            );
+        }
+    }
+}
+
 fn interpolation(criterion: &mut Criterion) {
     let mut group = criterion.benchmark_group("interpolation");
     group.warm_up_time(Duration::from_secs(1));
@@ -145,6 +234,8 @@ fn interpolation(criterion: &mut Criterion) {
     group.sample_size(20);
     run_field::<Gf8>(&mut group, "gf8");
     run_field::<Gf16>(&mut group, "gf16");
+    run_domain::<Gf8>(&mut group, "gf8");
+    run_domain::<Gf16>(&mut group, "gf16");
     group.finish();
 }
 
