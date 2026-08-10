@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
 
 ### Added
+- Geometry-aware automatic strategy selection: every interpolation, product,
+  candidate-scoring, and root-extraction crossover now resolves through pure,
+  backend-explicit cost keys in the new `cost` module (`select_interpolation`,
+  `select_product`, `select_scoring`, `select_root`, keyed on
+  `BackendClass`/`DomainClass`). Selectors perform no CPU detection —
+  classification happens once at stage entry — and the parameter search orders
+  tuples with the same interpolation/root work model. Explicit strategy
+  overrides are unchanged. Crossover values and their measurement provenance
+  moved out of source comments into `BENCHMARKS.md`.
 - Domain-specialized interpolation for additive-subspace and affine-coset
   domains: the vanishing polynomial `G(X)` is built from the `butterfly-fft`
   subspace polynomial, and the received-word interpolant `R` is computed by an
