@@ -78,6 +78,19 @@ releases follow [Semantic Versioning](https://semver.org/).
   diagnostics.
 
 ### Changed
+- Root extraction was refined for factor-heavy inputs. The Alekhnovich
+  divide-and-conquer leaf now factors the base field through a pooled
+  `FieldRootScratch` instead of allocating a fresh factorization workspace per
+  leaf, and its modular Frobenius uses characteristic-two squaring
+  (`P^2 = sum a_i^2 X^{2i}`) rather than a general product. Forced
+  divide-and-conquer root extraction is 30–48% faster across the GF8/GF16
+  synthetic and real-`Q` benchmark fixtures with no small-geometry regression.
+  Per-family completion and `Q(X,f(X)) == 0` verification are isolated into an
+  independent branch step prepared for optional parallel execution, and the
+  Roth–Ruckenstein/Alekhnovich crossover is now validated against real
+  interpolation polynomials, not only the synthetic four-root product. Output
+  root sets, candidate-count bounds, and work/family/scratch failure behavior
+  are unchanged.
 - `GsPlan::decode_into` is now a streaming path: after preparation and warm-up
   it alternates between different received words with no internal heap
   allocation, executing interpolation, root extraction, and scoring every call.

@@ -34,7 +34,9 @@ fn product_of_y_minus<F: ButterflyKernels>(roots: &[Polynomial<F>]) -> Bivariate
         let mut next = vec![Polynomial::<F>::zero(); rows.len() + 1];
         for (degree, row) in rows.iter().enumerate() {
             // Y - root = Y + root in characteristic two.
-            next[degree].add_assign(&row.multiply(root).unwrap()).unwrap();
+            next[degree]
+                .add_assign(&row.multiply(root).unwrap())
+                .unwrap();
             next[degree + 1].add_assign(row).unwrap();
         }
         rows = next;
@@ -66,12 +68,15 @@ fn extract<F: ButterflyKernels>(
 ) -> (Vec<Polynomial<F>>, Vec<Polynomial<F>>) {
     let rr = sorted(roth_ruckenstein_roots(q, max_degree, ROTH).unwrap());
     let mut scratch = AlekhnovichScratch::new();
-    let alekhnovich = sorted(alekhnovich_roots(q, max_degree, FORCE_ALEKHNOVICH, &mut scratch).unwrap());
+    let alekhnovich =
+        sorted(alekhnovich_roots(q, max_degree, FORCE_ALEKHNOVICH, &mut scratch).unwrap());
     (rr, alekhnovich)
 }
 
 fn list_rich<F: ButterflyKernels>(count: u64, root_degree: usize, max_degree: usize) {
-    let roots: Vec<Polynomial<F>> = (0..count).map(|index| keyed::<F>(index, root_degree)).collect();
+    let roots: Vec<Polynomial<F>> = (0..count)
+        .map(|index| keyed::<F>(index, root_degree))
+        .collect();
     let q = product_of_y_minus(&roots);
     let deg_y = q.y_degree().unwrap();
     assert_eq!(deg_y, count as usize);
@@ -79,7 +84,10 @@ fn list_rich<F: ButterflyKernels>(count: u64, root_degree: usize, max_degree: us
     let (rr, alekhnovich) = extract(&q, max_degree);
     let expected = sorted(roots);
     assert_eq!(rr, expected, "Roth–Ruckenstein missed a bounded root");
-    assert_eq!(alekhnovich, expected, "Alekhnovich diverged from Roth–Ruckenstein");
+    assert_eq!(
+        alekhnovich, expected,
+        "Alekhnovich diverged from Roth–Ruckenstein"
+    );
     assert!(rr.len() <= deg_y, "candidate count exceeds deg_Y Q");
     for root in &rr {
         assert!(q.has_root(root).unwrap(), "Q(X,f(X)) != 0");
@@ -93,8 +101,14 @@ fn no_bounded_root<F: ButterflyKernels>(count: u64, max_degree: usize) {
         .collect();
     let q = product_of_y_minus(&roots);
     let (rr, alekhnovich) = extract(&q, max_degree);
-    assert!(rr.is_empty(), "Roth–Ruckenstein returned an over-degree root");
-    assert!(alekhnovich.is_empty(), "Alekhnovich returned an over-degree root");
+    assert!(
+        rr.is_empty(),
+        "Roth–Ruckenstein returned an over-degree root"
+    );
+    assert!(
+        alekhnovich.is_empty(),
+        "Alekhnovich returned an over-degree root"
+    );
 }
 
 fn mixed_bound<F: ButterflyKernels>(max_degree: usize) {
@@ -108,7 +122,10 @@ fn mixed_bound<F: ButterflyKernels>(max_degree: usize) {
     let (rr, alekhnovich) = extract(&q, max_degree);
     let expected = sorted(bounded);
     assert_eq!(rr, expected, "Roth–Ruckenstein kept an over-degree root");
-    assert_eq!(alekhnovich, expected, "Alekhnovich kept an over-degree root");
+    assert_eq!(
+        alekhnovich, expected,
+        "Alekhnovich kept an over-degree root"
+    );
     assert!(rr.len() <= q.y_degree().unwrap());
 }
 
