@@ -14,6 +14,10 @@ simd = ["std", "fgf/simd", "butterfly-fft/simd", "gfm/simd"]
 # Unstable implementation APIs for benchmarking and downstream
 # experimentation. Exempt from compatibility guarantees.
 internals = []
+# Optional data parallelism over independent decode jobs, root families, and
+# large scoring blocks. Default-off; requires `std`. The `no_std` core and
+# single-thread behavior are unchanged when disabled.
+parallel = ["std", "dep:rayon"]
 
 [[bench]]
 name = "root_extraction"
@@ -44,6 +48,7 @@ harness = false
 butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
 fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
 gfm = { git = "https://github.com/nanithefkuc/gfm", rev = "ad6c35b1d1de1c7f6862bf319dbe0727b889837a", default-features = false }
+rayon = { version = "1", optional = true }
 
 
 [dev-dependencies]
