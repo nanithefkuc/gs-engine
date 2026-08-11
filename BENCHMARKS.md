@@ -163,3 +163,42 @@ models the selectors are built around — then by storage, `Y`-degree,
 multiplicity, and weighted degree. The score is an integer ordering key, not a
 wall-clock estimate; it exists so search deterministically picks one feasible
 tuple, never an infeasible one.
+
+## Parallel batch decode
+
+Selector: `GsPlan::decode_batch_into` spreads a batch across the Rayon pool only
+when the `parallel` feature is enabled and the word count reaches
+`PARALLEL_BATCH_CROSSOVER`; otherwise the batch decodes in order on the calling
+thread. Per-job work is one full `decode_into`, so the crossover keys on the
+number of independent words, not on per-word geometry.
+
+| Constant | Value | Meaning |
+| --- | ---: | --- |
+| `PARALLEL_BATCH_CROSSOVER` | 4 | spread a batch across the pool at or above this many words |
+
+The intra-decode parallelism constants (`PARALLEL_ROOT_FAMILY_CROSSOVER`,
+`PARALLEL_SCORING_CROSSOVER`) are scaffolded for future per-decode Rayon use and
+are not exercised by the current batch path; single-word `decode_into` stays
+sequential.
+
+Batch decode, `RAYON_NUM_THREADS=8`, `BATCH_SIZE = 16` words
+(`cargo bench --features parallel --bench parallel`), sequential per-word vs
+parallel batch, median wall time:
+
+| Geometry | Sequential | Parallel | Speedup |
+| --- | ---: | ---: | ---: |
+| GF8 `n64 k16 tau24` | 686 µs | 356 µs | 1.93× |
+| GF16 `n64 k16 tau24` | 1.11 ms | 510 µs | 2.18× |
+| GF8 `n32 k29 tau1` | 313 µs | 382 µs | 0.82× |
+| GF16 `n32 k29 tau1` | 448 µs | 467 µs | 0.96× |
+| GF8 `n16 k4 tau6` | 103 µs | 149 µs | 0.69× |
+| GF16 `n16 k4 tau6` | 152 µs | 163 µs | 0.93× |
+
+The win grows with per-word work: at `n64` the per-decode cost amortizes the
+pool overhead across 8 cores and the batch is ~2× faster; at `n16`–`n32` the
+per-decode work is too small to recover scheduling overhead, so the batch is
+no faster (and often slower) than in-order decode. The default crossover of 4
+words keeps tiny batches sequential; callers with large per-word geometries
+and many independent words see the speedup. Output is byte-identical to
+per-word `decode_into` in order, verified by `tests/parallel.rs` across
+repeated schedules and thread counts.

@@ -1,4 +1,4 @@
-#![cfg(feature = "std")]
+#![cfg(feature = "parallel")]
 
 //! Shared-plan and batch decoding contracts.
 //!

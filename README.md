@@ -68,6 +68,12 @@ allocation.
 - `internals` exposes unstable implementation APIs for benchmarking and
   research — the explicit reference interpolation matrix backend and its
   monomial/constraint helpers. Exempt from compatibility guarantees.
+- `parallel` (off by default, implies `std`) layers Rayon over independent
+  decode jobs: `GsPlan::decode_batch_into` shares one immutable plan across
+  many received words and spreads them across the pool above
+  `PARALLEL_BATCH_CROSSOVER` words. Output is byte-identical to per-word
+  decoding in order. Single-word `decode_into` and the `no_std` core are
+  unchanged when this feature is disabled.
 
 Default features are `std` and `simd`.
 

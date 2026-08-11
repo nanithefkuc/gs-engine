@@ -4,8 +4,19 @@ All notable changes to gs-engine are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
-
 ### Added
+- Optional parallel batch decoding behind the new `parallel` feature
+  (default-off, requires `std`). `GsPlan::decode_batch_into` decodes several
+  received words against one shared immutable plan, spreading the words across
+  the Rayon pool above `PARALLEL_BATCH_CROSSOVER` words and decoding in order
+  below it. Each word owns its scratch and output buffer, so the jobs are fully
+  independent and the result is byte-identical to per-word `decode_into` in
+  order, regardless of the thread schedule (`tests/parallel.rs` checks this
+  across repeated runs and thread counts). A new `DecodeError::BatchLengthMismatch`
+  rejects mismatched `received`/`scratches`/`outputs` slices before any work
+  runs. Single-word `decode_into` and the `no_std` core are unchanged when the
+  feature is off; on the reference host a 16-word GF16 `n64` batch decodes
+  ~2.2× faster than sequential per-word decode (see `BENCHMARKS.md`).
 - High-rate re-encoding decode path: `GsPlan` now decodes through a
   factor-reduced Guruswami–Sudan module when the geometry is high-rate and long
   enough. It selects the first `k = w + 1` support points deterministically,

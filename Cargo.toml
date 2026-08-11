@@ -44,6 +44,11 @@ harness = false
 name = "reencode"
 harness = false
 
+[[bench]]
+name = "parallel"
+required-features = ["parallel"]
+harness = false
+
 [dependencies]
 butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
 fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
