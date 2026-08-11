@@ -113,6 +113,21 @@ win was observed in the measured range, so the adaptive default keeps
 Roth–Ruckenstein everywhere unless
 `AlekhnovichLimits::with_roth_ruckenstein_crossover` overrides it.
 
+The crossover is validated against real interpolation polynomials, not only the
+synthetic four-root product: the `interpolation-n{8,16,32}` fixtures in
+`cargo bench --bench root_extraction` decode a corrupted codeword and extract
+roots from the resulting `Q`. Their weighted sizes (15–63) and the synthetic
+tier up to 2 565 all keep Roth–Ruckenstein ahead of divide-and-conquer, so the
+conservative 20 000 crossover holds after the base-field factoring changes.
+
+Base-field factoring was made scratch-aware in the Alekhnovich leaf (pooled
+`FieldRootScratch` instead of a per-leaf allocation) and its modular Frobenius
+now uses characteristic-two squaring (`P^2 = sum a_i^2 X^{2i}`) instead of a
+general product. Forced divide-and-conquer root extraction is 30–48% faster
+across the GF8/GF16 synthetic and real-`Q` fixtures on the reference host
+(`cargo bench --bench root_extraction`), with no regression on the small real-`Q`
+geometries.
+
 ## Re-encoding — direct vs factor-reduced module
 
 Selector: `select_reencode`. Axes: code length `n`, message length `k`, backend.

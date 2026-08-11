@@ -427,6 +427,34 @@ mod tests {
     }
 
     #[test]
+    fn real_q_weighted_sizes_stay_on_roth_ruckenstein() {
+        // Real interpolation polynomials in the benchmark corpus reach weighted
+        // sizes in the low thousands, where Roth–Ruckenstein stays faster than
+        // divide-and-conquer even after the base-field factoring speed-ups; the
+        // crossover keeps them on the simpler path. See `BENCHMARKS.md`.
+        for weighted in [15usize, 63, 645, 2565] {
+            let key = RootCostKey {
+                weighted_coefficients: weighted,
+                y_degree: 6,
+                target_precision: 10,
+                backend: SIMD,
+                roth_ruckenstein_crossover: 20_000,
+                backend_adaptive: true,
+            };
+            assert_eq!(select_root(key), RootBackend::RothRuckenstein);
+        }
+        let large = RootCostKey {
+            weighted_coefficients: 20_001,
+            y_degree: 6,
+            target_precision: 10,
+            backend: SIMD,
+            roth_ruckenstein_crossover: 20_000,
+            backend_adaptive: true,
+        };
+        assert_eq!(select_root(large), RootBackend::Alekhnovich);
+    }
+
+    #[test]
     fn interpolation_switches_to_module_at_the_crossover() {
         let base = InterpolationCostKey {
             field_bytes: 2,
