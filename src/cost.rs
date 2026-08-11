@@ -279,6 +279,54 @@ pub fn select_root(key: RootCostKey) -> RootBackend {
     }
 }
 
+/// Message-to-code-length ratio numerator at or above which re-encoding is
+/// selected. See `BENCHMARKS.md`.
+pub const REENCODE_RATE_NUMERATOR: usize = 3;
+/// Message-to-code-length ratio denominator for the re-encoding crossover.
+pub const REENCODE_RATE_DENOMINATOR: usize = 4;
+/// Minimum code length below which re-encoding stays on the direct module. See
+/// `BENCHMARKS.md`.
+pub const REENCODE_MIN_CODE_LENGTH: usize = 32;
+
+/// Cost key for deciding whether to use the factor-reduced re-encoding path.
+///
+/// Re-encoding pays off only at high rate and large length, where zeroing `k`
+/// coordinates shrinks the interpolation module enough to cover the helper
+/// interpolation and candidate unshift. The remaining fields pin the geometry a
+/// future retuning may weigh.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReencodeCostKey {
+    /// Field element width in bytes.
+    pub field_bytes: usize,
+    /// Selected backend capability class.
+    pub backend: BackendClass,
+    /// Code length `n`.
+    pub code_length: usize,
+    /// Message length `k = w + 1`.
+    pub message_length: usize,
+    /// Interpolation multiplicity `s`.
+    pub multiplicity: usize,
+    /// Maximum `Y` degree `ell`.
+    pub y_degree: usize,
+}
+
+/// Choose whether to decode through re-encoding. Pure. See `BENCHMARKS.md`.
+///
+/// Conservative: tiny or low-rate geometries stay on the direct module, where
+/// re-encoding overhead would not be recovered.
+#[must_use]
+pub fn select_reencode(key: ReencodeCostKey) -> bool {
+    if key.code_length < REENCODE_MIN_CODE_LENGTH {
+        return false;
+    }
+    if key.message_length == 0 || key.message_length >= key.code_length {
+        return false;
+    }
+    key.message_length
+        .saturating_mul(REENCODE_RATE_DENOMINATOR)
+        >= key.code_length.saturating_mul(REENCODE_RATE_NUMERATOR)
+}
+
 /// Interpolation work term of the parameter-search score.
 ///
 /// Constraints times basis rows times SIMD vector blocks per row; the score
