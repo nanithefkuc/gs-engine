@@ -322,8 +322,7 @@ pub fn select_reencode(key: ReencodeCostKey) -> bool {
     if key.message_length == 0 || key.message_length >= key.code_length {
         return false;
     }
-    key.message_length
-        .saturating_mul(REENCODE_RATE_DENOMINATOR)
+    key.message_length.saturating_mul(REENCODE_RATE_DENOMINATOR)
         >= key.code_length.saturating_mul(REENCODE_RATE_NUMERATOR)
 }
 

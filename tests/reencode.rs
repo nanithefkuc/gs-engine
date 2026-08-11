@@ -62,8 +62,7 @@ fn decode<F: ButterflyKernels>(plan: &GsPlan<F>, received: &[F::Elem]) -> Vec<Po
 
 /// Decode many received words through both paths and require identical lists.
 fn differential<F: ButterflyKernels>(n: usize, k: usize, target_radius: usize, seed: u64) {
-    let parameters =
-        GsParameters::search::<F>(n, k - 1, target_radius, PARAMETER_LIMITS).unwrap();
+    let parameters = GsParameters::search::<F>(n, k - 1, target_radius, PARAMETER_LIMITS).unwrap();
     let points: Vec<F::Elem> = (0..n as u64).map(element::<F>).collect();
     let domain = EvaluationDomain::arbitrary(points.clone()).unwrap();
 
@@ -92,7 +91,10 @@ fn differential<F: ButterflyKernels>(n: usize, k: usize, target_radius: usize, s
 
         let direct = sorted(decode(&plan_off, &received));
         let reencoded = sorted(decode(&plan_on, &received));
-        assert_eq!(direct, reencoded, "re-encoding diverged from the direct path");
+        assert_eq!(
+            direct, reencoded,
+            "re-encoding diverged from the direct path"
+        );
         if reencoded.contains(&message) {
             recovered += 1;
         }
@@ -120,8 +122,7 @@ fn gf32_large_high_rate_reencoding_matches_direct_path() {
 #[test]
 fn conservative_selector_gates_on_rate_and_length() {
     // Large and high-rate: auto-selects re-encoding.
-    let large =
-        GsParameters::search::<Gf32>(32, 23, 4, PARAMETER_LIMITS).unwrap();
+    let large = GsParameters::search::<Gf32>(32, 23, 4, PARAMETER_LIMITS).unwrap();
     let points: Vec<<Gf32 as Field>::Elem> = (0..32u64).map(element::<Gf32>).collect();
     let domain = EvaluationDomain::<Gf32>::arbitrary(points).unwrap();
     let plan = GsPlan::new(large, domain, ROOT_LIMITS).unwrap();

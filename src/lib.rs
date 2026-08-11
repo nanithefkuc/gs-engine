@@ -25,8 +25,8 @@ mod scratch;
 pub use cost::{
     BackendClass, DomainClass, InterpolationBackend, InterpolationCostKey, ProductBackend,
     ProductCostKey, REENCODE_MIN_CODE_LENGTH, REENCODE_RATE_DENOMINATOR, REENCODE_RATE_NUMERATOR,
-    ReencodeCostKey, RootBackend, RootCostKey, ScoringBackend, ScoringCostKey, select_interpolation,
-    select_product, select_reencode, select_root, select_scoring,
+    ReencodeCostKey, RootBackend, RootCostKey, ScoringBackend, ScoringCostKey,
+    select_interpolation, select_product, select_reencode, select_root, select_scoring,
 };
 pub use decoder::{DecodeError, GsPlan};
 pub use domain::{DomainError, EvaluationBackend, EvaluationDomain};

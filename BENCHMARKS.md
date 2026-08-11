@@ -28,6 +28,8 @@ below via the public override APIs:
   (`cargo bench --all-features --bench scoring`);
 - root extraction — `AlekhnovichLimits::with_roth_ruckenstein_crossover`
   (`cargo bench --all-features --bench root_extraction`);
+- re-encoding — `GsPlan::with_reencode(true|false)`
+  (`cargo bench --bench reencode`);
 - interpolation and end-to-end — `--bench interpolation`, `--bench decoder`.
 
 ## Reference host
@@ -110,6 +112,33 @@ keeps Roth–Ruckenstein through 20 000. On a scalar backend no divide-and-conqu
 win was observed in the measured range, so the adaptive default keeps
 Roth–Ruckenstein everywhere unless
 `AlekhnovichLimits::with_roth_ruckenstein_crossover` overrides it.
+
+## Re-encoding — direct vs factor-reduced module
+
+Selector: `select_reencode`. Axes: code length `n`, message length `k`, backend.
+Re-encoding zeroes the first `k` coordinates, decodes the shifted word over the
+remaining `n - k` support points with a factor-reduced module, then unshifts the
+candidates. It pays off only at high rate and sufficient length.
+
+| Constant | Value | Meaning |
+| --- | ---: | --- |
+| `REENCODE_RATE_NUMERATOR` / `REENCODE_RATE_DENOMINATOR` | 3 / 4 | re-encode at rate `k/n >= 3/4` |
+| `REENCODE_MIN_CODE_LENGTH` | 32 | never re-encode below this `n` |
+
+Warmed changed-word end-to-end decode, GF8 (`v3_gfni_crypto`), forced direct vs
+re-encoding (`cargo bench --bench reencode`):
+
+| Geometry | Direct | Re-encode | Speedup |
+| --- | ---: | ---: | ---: |
+| `n64 k48 tau8` (rate 3/4) | 46.7 µs | 45.2 µs | 1.03× |
+| `n64 k58 tau3` (rate 9/10) | 51.2 µs | 41.9 µs | 1.22× |
+| `n128 k96 tau16` (rate 3/4) | 201 µs | 143 µs | 1.41× |
+| `n128 k115 tau6` (rate 9/10) | 239 µs | 177 µs | 1.35× |
+
+The win grows with length and rate and covers the helper interpolation, received
+shift, and candidate unshift. Below `n = 32` the reduction never recovers that
+overhead, so the crossover holds the direct module there; tiny and low-rate
+geometries in the `end-to-end` corpus keep the direct path.
 
 ## Parameter-search score
 

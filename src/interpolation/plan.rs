@@ -336,9 +336,11 @@ fn powers_of<F: FieldKernels>(
     let mut powers = Vec::new();
     reserve(
         &mut powers,
-        maximum.checked_add(1).ok_or(ConfigError::GeometryOverflow {
-            context: "re-encoding power count",
-        })?,
+        maximum
+            .checked_add(1)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "re-encoding power count",
+            })?,
         context,
     )?;
     powers.push(Polynomial::one()?);

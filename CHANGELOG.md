@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
 
 ### Added
+- High-rate re-encoding decode path: `GsPlan` now decodes through a
+  factor-reduced Guruswami–Sudan module when the geometry is high-rate and long
+  enough. It selects the first `k = w + 1` support points deterministically,
+  interpolates a degree-`w` helper `e(X)` through them, shifts the received word
+  so those coordinates vanish, and builds the interpolation module over the
+  remaining `n - k` points from the reduced interpolant `R̃` and reduced
+  vanishing polynomial `G_rem`. The shared re-encoding vanishing polynomial `Psi`
+  is a prefactor of every reduced row (characteristic-two Sierpiński parity keeps
+  the rows sparse); it is divided back out when reconstructing the full
+  interpolation polynomial, whose roots are unshifted by `e(X)` before scoring.
+  Transformed and direct paths return byte-identical candidate lists, verified
+  against the direct module as a differential oracle, and the warmed changed-word
+  path allocates nothing. A conservative pure selector (`select_reencode`,
+  rate `k/n >= 3/4` and `n >= 32`) drives automatic use; `GsPlan::with_reencode`
+  is the explicit override and `GsPlan::uses_reencode` reports the choice. On the
+  reference host the path is up to ~1.4× faster end-to-end at high rate,
+  including shift and unshift costs, while tiny and low-rate geometries stay on
+  the direct module.
 - Nonuniform-multiplicity interpolation problem under `internals`: new
   `MultiplicityPoint` and `InterpolationProblem` types carry a per-point
   multiplicity, the lower set a fast Kötter–Nielsen–Høholdt backend consumes

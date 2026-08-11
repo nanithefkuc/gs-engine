@@ -59,7 +59,9 @@ fn warmed_reencoded_decode_uses_no_internal_heap_allocations() {
     .unwrap();
     let points: Vec<_> = (0..16).map(gf16).collect();
     let message = Polynomial::<Gf16>::from_coefficients(
-        &(0..12).map(|i| gf16((3 * i + 1) as u16)).collect::<Vec<_>>(),
+        &(0..12)
+            .map(|i| gf16((3 * i + 1) as u16))
+            .collect::<Vec<_>>(),
     )
     .unwrap();
     let clean = message.evaluate_many(&points).unwrap();

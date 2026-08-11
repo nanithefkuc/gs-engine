@@ -5,8 +5,8 @@ use butterfly_fft::core::kernel::ButterflyKernels;
 use butterfly_fft::error::TransformLengthError;
 
 use crate::evaluate::score_candidates;
-use crate::roots::alekhnovich_roots_into;
 use crate::interpolation::{ReencodePlan, interpolate_reencoded_into};
+use crate::roots::alekhnovich_roots_into;
 use crate::{
     AlekhnovichLimits, ConfigError, DecodeScratch, DomainError, EvaluationDomain, GsParameters,
     InterpolationError, InterpolationPlan, Polynomial, RootError, interpolate_koetter_into,

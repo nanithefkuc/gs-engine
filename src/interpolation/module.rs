@@ -798,8 +798,8 @@ pub(crate) fn interpolate_reencoded_into<F: FieldKernels>(
         scratch.shifted_received[index] = symbol.add(scratch.helper.evaluate(point));
     }
     for offset in 0..remaining {
-        scratch.reduced_values[offset] = scratch.shifted_received[message_len + offset]
-            .mul(plan.inv_psi_at_remaining[offset]);
+        scratch.reduced_values[offset] =
+            scratch.shifted_received[message_len + offset].mul(plan.inv_psi_at_remaining[offset]);
     }
 
     // Reduced interpolant R̃(X) and its powers.
@@ -852,7 +852,9 @@ pub(crate) fn interpolate_reencoded_into<F: FieldKernels>(
         .ok_or(InterpolationError::InvalidResult {
             reason: "reduced re-encoding module has no nonzero row",
         })?;
-    scratch.basis.materialize(row, &mut scratch.reduced_output)?;
+    scratch
+        .basis
+        .materialize(row, &mut scratch.reduced_output)?;
     reconstruct_reencoded(
         parameters,
         plan,
