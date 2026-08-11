@@ -5,25 +5,53 @@
 
 # gs-engine
 
-Reusable Guruswami–Sudan list decoding for Reed–Solomon evaluation codes.
-The crate provides checked parameter search, Hasse interpolation, complete
-polynomial root extraction, and Hamming-radius filtering. It is `no_std` with
-`alloc` when default features are disabled.
+`gs-engine` provides checked parameter search, Hasse interpolation, complete
+polynomial root extraction, and Hamming-radius filtering — a reusable
+Guruswami–Sudan list-decoding engine for Reed–Solomon evaluation codes. The
+crate is `no_std` with `alloc` when default features are disabled.
 
-## Supported fields
+## Usage
+
+The MSRV is Rust 1.89.
+
+`gs-engine` is distributed through git only; it is not published to [crates.io](https://crates.io).
+
+```toml
+[dependencies]
+gs-engine = { git = "https://github.com/nanithefkuc/gs-engine" }
+```
+
+Portable `no_std` builds are also available:
+
+```toml
+[dependencies]
+gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", default-features = false }
+```
+
+### Features
+
+| Feature | Result |
+| --- | --- |
+| default (`std`, `simd`) | standard-library error integration and runtime-selected SIMD kernels |
+| `std` without `simd` | portable kernels with allocation-backed plans |
+| `--no-default-features` | `no_std`, `alloc`, portable kernels |
+| `internals` | unstable implementation APIs for benchmarking and research; exempt from compatibility guarantees |
+| `parallel` (implies `std`) | Rayon over independent decode jobs; default-off |
+
+### Supported fields
 
 The production decoder is validated for the binary extension fields `fgf::Gf8`
 and `fgf::Gf16`. Generic APIs require the corresponding `fgf::FieldKernels` or
-`butterfly_fft::core::kernel::ButterflyKernels` implementation. Root splitting rejects fields whose
-order is not a power of two or whose stable element representation exceeds 16
-bytes; it never falls back to scanning the full field.
+`butterfly_fft::core::kernel::ButterflyKernels` implementation. Root splitting
+rejects fields whose order is not a power of two or whose stable element
+representation exceeds 16 bytes; it never falls back to scanning the full field.
 
-## Domain and received-symbol contract
+### Domain and received-symbol contract
 
 `EvaluationDomain::arbitrary` preserves the supplied distinct-point order.
 Additive-subspace and affine-coset constructors derive their point order
-directly from the associated butterfly-fft plan. `EvaluationDomain::points()` is the
-canonical order for encoding and for the received slice passed to
+directly from the associated `butterfly-fft` plan. `EvaluationDomain::points()`
+is the canonical order for encoding and for the received slice passed to
 `GsPlan::decode_into`.
 
 Received symbols are canonical `F::Elem` values, one per domain point. The core
@@ -31,7 +59,7 @@ decoder has no erasure or sentinel representation: adapters must normalize
 external bytes, shortened coordinates, or reliability metadata before calling
 it. A received slice with the wrong length is rejected before interpolation.
 
-## Candidate semantics
+### Candidate semantics
 
 A successful decode returns distinct normalized polynomials in deterministic
 coefficient order. Every returned polynomial:
@@ -43,7 +71,7 @@ coefficient order. Every returned polynomial:
 Candidates are message polynomials, not serialized codewords. Protocol-specific
 admissibility rules belong in adapters after decoding.
 
-## Resource limits and scratch
+### Resource limits and scratch
 
 Configuration is always caller-bounded:
 
@@ -60,18 +88,7 @@ capacity. The first data-dependent interpolation/root pass may still grow
 storage. Repeating the same decode with warmed scratch performs no internal heap
 allocation.
 
-## Features
-
-- `std` enables standard-library error integration and butterfly-fft/FGF standard
-  support.
-- `simd` enables runtime-selected SIMD kernels and implies `std`.
-- `internals` exposes unstable implementation APIs for benchmarking and
-  research — the explicit reference interpolation matrix backend and its
-  monomial/constraint helpers. Exempt from compatibility guarantees.
-
-Default features are `std` and `simd`.
-
-## Minimal use
+### Minimal use
 
 ```rust,no_run
 use fgf::Gf16;
@@ -101,6 +118,22 @@ plan.decode_into(&received, &mut scratch, &mut candidates)?;
 ```
 
 The primary decoding API is `GsPlan::decode_into(received, scratch, output)`.
+For several received words sharing one geometry, `GsPlan::decode_batch_into`
+shares the immutable plan across independent scratch instances and, with the
+`parallel` feature, spreads the words across the Rayon pool above
+`PARALLEL_BATCH_CROSSOVER` words. Output is byte-identical to per-word decoding
+in order regardless of the thread schedule.
+
+## Building
+
+`gs-engine` builds on stable Rust (edition 2024, MSRV 1.89) with no extra
+tooling or target-feature flags — SIMD kernels are selected at runtime:
+
+```sh
+cargo build                        # default: std + simd
+cargo build --no-default-features  # portable no_std
+cargo test --all-features
+```
 
 ## Benchmarks and crossover policy
 
@@ -144,13 +177,8 @@ crossover inspect the selected backend. An explicit product strategy or
 
 Packed AXPY is selected by `fgf` from the active backend and row width; scalar
 fallback remains bit-exact and is continuously checked against the selected
-backend.
-
-
-## Minimum supported Rust version
-
-1.89, edition 2024. An MSRV bump is a minor-version change.
+backend. Measurement and reproduction notes are in [BENCHMARKS.md](BENCHMARKS.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE)

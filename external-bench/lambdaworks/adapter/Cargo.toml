@@ -1,0 +1,15 @@
+[package]
+name = "lambdaworks-gs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "Native-prime lambdaworks Guruswami-Sudan comparison adapter (.gso protocol)"
+
+# Standalone workspace: isolated from gs-engine and the controller so nothing
+# links into the published crate's dependency graph.
+[workspace]
+
+[[bin]]
+name = "lambdaworks-gs"
+path = "src/main.rs"

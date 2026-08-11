@@ -4,7 +4,7 @@ use butterfly_fft::basis::conversion_scratch_elements;
 use butterfly_fft::core::kernel::ButterflyKernels;
 
 use crate::geometry::checked_product;
-use crate::interpolation::ModuleScratch;
+use crate::interpolation::{ModuleScratch, ReencodeScratch};
 use crate::{AlekhnovichScratch, BivariatePolynomial, ConfigError, KoetterScratch, Polynomial};
 
 /// Caller-owned reusable workspaces used by end-to-end decoding.
@@ -17,6 +17,7 @@ pub struct DecodeScratch<F: ButterflyKernels> {
     pub(crate) packed_evaluations: Vec<u8>,
     pub(crate) conversion: Vec<u8>,
     pub(crate) distances: Vec<usize>,
+    pub(crate) reencode: ReencodeScratch<F>,
 }
 
 impl<F: ButterflyKernels> DecodeScratch<F> {
@@ -32,6 +33,7 @@ impl<F: ButterflyKernels> DecodeScratch<F> {
             packed_evaluations: Vec::new(),
             conversion: Vec::new(),
             distances: Vec::new(),
+            reencode: ReencodeScratch::new(),
         }
     }
 
@@ -66,6 +68,13 @@ impl<F: ButterflyKernels> DecodeScratch<F> {
     #[must_use]
     pub fn module_capacity(&self) -> usize {
         self.module.capacity()
+    }
+
+    /// Retained factor-reduced re-encoding basis and power capacity.
+    #[cfg(feature = "internals")]
+    #[must_use]
+    pub fn reencode_capacity(&self) -> usize {
+        self.reencode.capacity()
     }
 
     pub(crate) fn reserve_evaluation(

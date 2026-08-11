@@ -10,17 +10,25 @@
 
 extern crate alloc;
 
+pub mod cost;
 mod decoder;
 pub mod domain;
 mod error;
 mod evaluate;
 pub mod geometry;
 pub mod interpolation;
+mod parallel;
 pub mod params;
 pub mod poly;
 pub mod roots;
 mod scratch;
 
+pub use cost::{
+    BackendClass, DomainClass, InterpolationBackend, InterpolationCostKey, ProductBackend,
+    ProductCostKey, REENCODE_MIN_CODE_LENGTH, REENCODE_RATE_DENOMINATOR, REENCODE_RATE_NUMERATOR,
+    ReencodeCostKey, RootBackend, RootCostKey, ScoringBackend, ScoringCostKey,
+    select_interpolation, select_product, select_reencode, select_root, select_scoring,
+};
 pub use decoder::{DecodeError, GsPlan};
 pub use domain::{DomainError, EvaluationBackend, EvaluationDomain};
 pub use error::ConfigError;
@@ -33,8 +41,10 @@ pub use evaluate::{
 pub use evaluate::{ScoringStrategy, score_candidates_with_strategy};
 #[cfg(feature = "internals")]
 pub use interpolation::{
-    InterpolationConstraint, InterpolationMonomial, ReferenceInterpolationLimits,
-    interpolate_reference, reference_constraints, reference_monomials,
+    FastKnhScratch, InterpolationConstraint, InterpolationMonomial, InterpolationProblem,
+    MultiplicityPoint, ReferenceInterpolationLimits, interpolate_fast_knh,
+    interpolate_fast_knh_into, interpolate_reference, interpolate_reference_nonuniform,
+    reference_constraints, reference_monomials,
 };
 pub use interpolation::{
     InterpolationError, InterpolationPlan, KoetterScratch, MODULE_INTERPOLATION_CROSSOVER,
@@ -55,3 +65,12 @@ pub use roots::{
     base_field_roots, roth_ruckenstein_roots,
 };
 pub use scratch::DecodeScratch;
+
+#[doc(hidden)]
+pub use parallel::ParallelElem;
+#[doc(hidden)]
+pub use parallel::ParallelField;
+#[cfg(feature = "parallel")]
+pub use parallel::{
+    PARALLEL_BATCH_CROSSOVER, PARALLEL_ROOT_FAMILY_CROSSOVER, PARALLEL_SCORING_CROSSOVER,
+};

@@ -45,6 +45,21 @@ fn bounded_search_finds_the_minimum_known_tuple() {
 }
 
 #[test]
+fn search_only_returns_feasible_tuples_across_a_grid() {
+    for radius in 1..=6 {
+        let Ok(parameters) = GsParameters::search::<Gf16>(15, 4, radius, GENEROUS) else {
+            continue;
+        };
+        let resources = parameters.resources();
+        assert!(
+            resources.monomials() > resources.constraints(),
+            "search returned an infeasible tuple at radius {radius}"
+        );
+        assert!(parameters.guaranteed_radius() >= radius);
+    }
+}
+
+#[test]
 fn exact_counts_include_zero_weight_y_rows() {
     assert_eq!(interpolation_monomials(17, 4, 4), Ok(50));
     assert_eq!(interpolation_constraints(15, 2), Ok(45));

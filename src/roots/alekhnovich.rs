@@ -3,23 +3,21 @@ use core::cmp::Ordering;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Field;
-use fgf::kernel::{Backend, backend_for};
 
 use crate::{BivariatePolynomial, ConfigError, Polynomial, PolynomialProductScratch};
 
+use super::field_roots::{FieldRootScratch, base_field_roots_into};
 use super::roth_ruckenstein::{
-    RothRuckensteinScratch, compare_polynomials, constant_y_polynomial, enforce_limit,
+    RothRuckensteinScratch, compare_polynomials, constant_y_polynomial_into, enforce_limit,
     roth_ruckenstein_roots_into,
 };
-use super::{BaseFieldRoots, RootError, RothRuckensteinLimits, base_field_roots};
+use super::{RootError, RothRuckensteinLimits};
 
-/// Default measured packed-kernel crossover in weighted input coefficients.
+/// Default weighted-coefficient crossover to Alekhnovich divide-and-conquer.
 ///
-/// GF16/GFNI first favors divide-and-conquer at weighted size 20,485. The
-/// default keeps Roth–Ruckenstein through 20,000; scalar kernels retain
-/// Roth–Ruckenstein because no divide-and-conquer win was observed in the
-/// measured range. Use [`AlekhnovichLimits::with_roth_ruckenstein_crossover`]
-/// to force a backend-independent threshold.
+/// Roth–Ruckenstein is used at or below this weighted input size (and always on
+/// a scalar backend unless overridden). Set explicitly with
+/// [`AlekhnovichLimits::with_roth_ruckenstein_crossover`]. See `BENCHMARKS.md`.
 pub const DEFAULT_ROTH_RUCKENSTEIN_CROSSOVER: usize = 20_000;
 
 /// Caller-provided bounds for Alekhnovich root extraction.
@@ -136,6 +134,10 @@ pub struct AlekhnovichScratch<F: ButterflyKernels> {
     products: PolynomialProductScratch<F>,
     transformed: BivariatePolynomial<F>,
     roth: RothRuckensteinScratch<F>,
+    field_roots: FieldRootScratch<F>,
+    constant_y: Polynomial<F>,
+    constant_y_coeffs: Vec<F::Elem>,
+    base_roots: Vec<F::Elem>,
 }
 
 impl<F: ButterflyKernels> AlekhnovichScratch<F> {
@@ -148,6 +150,10 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
             products: PolynomialProductScratch::new(),
             transformed: BivariatePolynomial::zero(),
             roth: RothRuckensteinScratch::new(),
+            field_roots: FieldRootScratch::new(),
+            constant_y: Polynomial::zero(),
+            constant_y_coeffs: Vec::new(),
+            base_roots: Vec::new(),
         }
     }
 
@@ -160,7 +166,7 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
     /// Retained divide-and-conquer frame and Roth–Ruckenstein pool capacity.
     #[must_use]
     pub fn capacity(&self) -> usize {
-        self.frames.capacity() + self.roth.capacity()
+        self.frames.capacity() + self.roth.capacity() + self.field_roots.capacity()
     }
 
     fn clear(&mut self) {
@@ -258,12 +264,15 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
         limits.max_coefficients,
     )?;
 
-    let crossover = if limits.backend_adaptive_crossover && backend_for::<F>() == Backend::Scalar {
-        usize::MAX
-    } else {
-        limits.roth_ruckenstein_crossover
-    };
-    if weighted_size <= crossover {
+    let root_backend = crate::cost::select_root(crate::cost::RootCostKey {
+        weighted_coefficients: weighted_size,
+        y_degree: polynomial.y_coefficient_count(),
+        target_precision: max_degree,
+        backend: crate::cost::BackendClass::detect::<F>(),
+        roth_ruckenstein_crossover: limits.roth_ruckenstein_crossover,
+        backend_adaptive: limits.backend_adaptive_crossover,
+    });
+    if root_backend == crate::cost::RootBackend::RothRuckenstein {
         return roth_ruckenstein_roots_into(
             polynomial,
             max_degree,
@@ -322,22 +331,28 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
                         family_bytes,
                         limits,
                     )?;
-                    let constant_y = constant_y_polynomial(&frame.polynomial)?;
-                    let roots = match base_field_roots(&constant_y)? {
-                        BaseFieldRoots::All => {
-                            return Err(RootError::FactorizationInvariant {
-                                reason: "an X-normalized Alekhnovich node has zero constant-X row",
-                            });
-                        }
-                        BaseFieldRoots::Finite(roots) => roots,
-                    };
+                    constant_y_polynomial_into(
+                        &frame.polynomial,
+                        &mut scratch.constant_y_coeffs,
+                        &mut scratch.constant_y,
+                    )?;
+                    let all_field = base_field_roots_into(
+                        &scratch.constant_y,
+                        &mut scratch.field_roots,
+                        &mut scratch.base_roots,
+                    )?;
+                    if all_field {
+                        return Err(RootError::FactorizationInvariant {
+                            reason: "an X-normalized Alekhnovich node has zero constant-X row",
+                        });
+                    }
                     let mut families = Vec::new();
                     reserve_exact::<AffineRootFamily<F>>(
                         &mut families,
-                        roots.len(),
+                        scratch.base_roots.len(),
                         "Alekhnovich scalar root families",
                     )?;
-                    for root in roots {
+                    for &root in &scratch.base_roots {
                         insert_family(
                             &mut families,
                             AffineRootFamily::new(Polynomial::constant(root)?, 1),
@@ -691,6 +706,7 @@ fn materialize_candidates<F: ButterflyKernels>(
         context: "Alekhnovich field order",
     })?;
     let mut candidates = Vec::new();
+    let mut branch = Vec::new();
 
     for family in families {
         if family
@@ -718,19 +734,15 @@ fn materialize_candidates<F: ButterflyKernels>(
             y_degree,
         )?;
 
-        for ordinal in 0..completion_count {
-            let mut candidate = family.prefix.clone();
-            let mut digits = ordinal;
-            for degree in family.tail_degree..coefficient_count {
-                let key = digits % field_order;
-                digits /= field_order;
-                candidate.set_coefficient(degree, element_from_key::<F>(key))?;
-            }
-            if !polynomial.has_root(&candidate)? {
-                return Err(RootError::FactorizationInvariant {
-                    reason: "a final Alekhnovich affine family contained a nonroot",
-                });
-            }
+        materialize_family(
+            polynomial,
+            &family,
+            coefficient_count,
+            field_order,
+            completion_count,
+            &mut branch,
+        )?;
+        for candidate in branch.drain(..) {
             if !candidates.iter().any(|existing| existing == &candidate) {
                 candidates
                     .try_reserve(1)
@@ -759,6 +771,48 @@ fn materialize_candidates<F: ButterflyKernels>(
         }
     }
     Ok(candidates)
+}
+
+/// Complete and verify one affine family's bounded roots into `branch`.
+///
+/// Each affine root family is an independent branch: expanding its free tail
+/// coefficients and checking `Q(X, f(X)) == 0` depends only on the family and
+/// the interpolation polynomial, never on sibling families. This is the unit
+/// prepared for optional parallel execution — [`materialize_candidates`] merges
+/// branches sequentially so deduplication and the cumulative output/`Y`-degree
+/// limits keep their exact failure behavior.
+fn materialize_family<F: ButterflyKernels>(
+    polynomial: &BivariatePolynomial<F>,
+    family: &AffineRootFamily<F>,
+    coefficient_count: usize,
+    field_order: usize,
+    completion_count: usize,
+    branch: &mut Vec<Polynomial<F>>,
+) -> Result<(), RootError> {
+    branch.clear();
+    for ordinal in 0..completion_count {
+        let mut candidate = family.prefix.clone();
+        let mut digits = ordinal;
+        for degree in family.tail_degree..coefficient_count {
+            let key = digits % field_order;
+            digits /= field_order;
+            candidate.set_coefficient(degree, element_from_key::<F>(key))?;
+        }
+        if !polynomial.has_root(&candidate)? {
+            return Err(RootError::FactorizationInvariant {
+                reason: "a final Alekhnovich affine family contained a nonroot",
+            });
+        }
+        branch
+            .try_reserve(1)
+            .map_err(|_| ConfigError::AllocationFailed {
+                context: "Alekhnovich family completions",
+                elements: branch.len() + 1,
+                element_size: core::mem::size_of::<Polynomial<F>>(),
+            })?;
+        branch.push(candidate);
+    }
+    Ok(())
 }
 
 fn checked_power(base: usize, exponent: usize) -> Result<usize, RootError> {

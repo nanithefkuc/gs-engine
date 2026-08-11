@@ -58,3 +58,30 @@ use these exact definitions:
 An adapter using an isomorphic representation records and validates an explicit
 forward/inverse map before timing. The `support` array is always authoritative;
 `domain` describes its construction but never permits an adapter to reorder it.
+
+## Batch version 1
+
+A batch fixture carries several received words sharing one geometry and one
+expected candidate set, for parallel/sequential batch-decode comparison. The
+first line is:
+
+```text
+gs-engine-batch-v1
+```
+
+The records are the same singletons as version 1 up to and including
+`support=`, then:
+
+```text
+received-words=<count>
+received-word=<element>[,<element>...]
+[received-word=...]
+expected-candidate=<element>[,<element>...]
+[expected-candidate=...]
+```
+
+`received-words` gives the exact number of `received-word` records that follow,
+each `n` elements. The expected candidate set is shared: every received word
+is a corruption of the same codeword and decodes to it, so the batch does
+uniform work. Validation decodes every word and requires each to produce the
+shared set. The element encoding and ordering rules are identical to version 1.

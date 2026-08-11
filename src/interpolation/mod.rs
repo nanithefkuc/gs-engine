@@ -1,16 +1,22 @@
 //! Guruswami–Sudan interpolation backends.
 
+#[cfg(feature = "internals")]
+mod fast_knh;
 mod koetter;
 mod module;
 mod plan;
 
+#[cfg(feature = "internals")]
+pub use fast_knh::{FastKnhScratch, interpolate_fast_knh, interpolate_fast_knh_into};
 pub use koetter::{
     KoetterScratch, interpolate_koetter, interpolate_koetter_into, interpolate_koetter_with_scratch,
 };
 pub use module::{
     MODULE_INTERPOLATION_CROSSOVER, ModuleScratch, interpolate_module, interpolate_module_into,
 };
+pub(crate) use module::{ReencodeScratch, interpolate_reencoded_into};
 pub use plan::InterpolationPlan;
+pub(crate) use plan::ReencodePlan;
 
 #[cfg(feature = "internals")]
 use alloc::vec::Vec;
@@ -47,6 +53,40 @@ pub struct InterpolationConstraint {
     pub x_order: usize,
     /// Hasse derivative order in `Y`.
     pub y_order: usize,
+}
+#[cfg(feature = "internals")]
+/// One interpolation point carrying its own multiplicity.
+///
+/// Uniform Guruswami–Sudan assigns the same multiplicity to every point.
+/// Fast Kötter–Nielsen–Høholdt interpolation consumes a lower set where each
+/// point may carry a different multiplicity; this type is the entry seam for
+/// that representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MultiplicityPoint<E> {
+    /// Evaluation point `X = x`.
+    pub x: E,
+    /// Received value `Y = y` at `x`.
+    pub y: E,
+    /// Hasse multiplicity `s` at `(x, y)`; the lower set is `a + b < s`.
+    pub multiplicity: usize,
+}
+
+#[cfg(feature = "internals")]
+/// A nonuniform-multiplicity Guruswami–Sudan interpolation problem.
+///
+/// Each point may carry a different multiplicity, matching the lower set a
+/// fast KNH backend consumes directly. The `(1, y_weight)` weighted-degree
+/// bound and `Y`-degree bound are global, exactly as in the uniform problem.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InterpolationProblem<'a, E: Elem> {
+    /// Interpolation points with per-point multiplicities, in canonical order.
+    pub points: &'a [MultiplicityPoint<E>],
+    /// `(1, max_degree)` weight applied to `Y` exponents.
+    pub y_weight: usize,
+    /// Maximum `Y` degree `ell`.
+    pub y_degree: usize,
+    /// Weighted-degree bound `D`.
+    pub weighted_degree: usize,
 }
 
 #[cfg(feature = "internals")]
@@ -204,6 +244,20 @@ impl From<butterfly_fft::error::TransformLengthError> for InterpolationError {
         Self::Transform(error)
     }
 }
+impl From<crate::poly::PolynomialError> for InterpolationError {
+    fn from(error: crate::poly::PolynomialError) -> Self {
+        use crate::poly::PolynomialError;
+        match error {
+            PolynomialError::DivisionByZero => Self::InvalidResult {
+                reason: "polynomial division by zero in fast KNH",
+            },
+            PolynomialError::NonExactDivision => Self::InvalidResult {
+                reason: "non-exact polynomial division in fast KNH",
+            },
+            PolynomialError::Config(config) => Self::Config(config),
+        }
+    }
+}
 
 #[cfg(feature = "std")]
 impl std::error::Error for InterpolationError {}
@@ -213,7 +267,28 @@ impl std::error::Error for InterpolationError {}
 pub fn reference_monomials(
     parameters: GsParameters,
 ) -> Result<Vec<InterpolationMonomial>, InterpolationError> {
-    let expected = parameters.resources().monomials();
+    let monomials = enumerate_monomials(
+        parameters.y_degree(),
+        parameters.max_degree(),
+        parameters.weighted_degree(),
+    )?;
+    if monomials.len() != parameters.resources().monomials() {
+        return Err(InterpolationError::InvalidResult {
+            reason: "monomial enumeration disagrees with the parameter count",
+        });
+    }
+    Ok(monomials)
+}
+
+#[cfg(feature = "internals")]
+/// Enumerate every monomial `X^a Y^b` with `b <= y_degree` and
+/// `a + b * y_weight <= weighted_degree`, in `Y`-major order.
+fn enumerate_monomials(
+    y_degree: usize,
+    y_weight: usize,
+    weighted_degree: usize,
+) -> Result<Vec<InterpolationMonomial>, InterpolationError> {
+    let expected = crate::params::interpolation_monomials(weighted_degree, y_degree, y_weight)?;
     let mut monomials = Vec::new();
     monomials
         .try_reserve_exact(expected)
@@ -222,22 +297,21 @@ pub fn reference_monomials(
             elements: expected,
             element_size: core::mem::size_of::<InterpolationMonomial>(),
         })?;
-    for y_degree in 0..=parameters.y_degree() {
-        let y_weight =
-            y_degree
-                .checked_mul(parameters.max_degree())
-                .ok_or(ConfigError::GeometryOverflow {
-                    context: "reference monomial Y weight",
-                })?;
-        if y_weight > parameters.weighted_degree() {
+    for b in 0..=y_degree {
+        let weight = b
+            .checked_mul(y_weight)
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "reference monomial Y weight",
+            })?;
+        if weight > weighted_degree {
             continue;
         }
-        let max_x_degree = parameters.weighted_degree() - y_weight;
-        for x_degree in 0..=max_x_degree {
+        let max_a = weighted_degree - weight;
+        for a in 0..=max_a {
             monomials.push(InterpolationMonomial {
-                x_degree,
-                y_degree,
-                weighted_degree: x_degree + y_weight,
+                x_degree: a,
+                y_degree: b,
+                weighted_degree: a + weight,
             });
         }
     }
@@ -255,17 +329,43 @@ pub fn reference_monomials(
 pub fn reference_constraints(
     parameters: GsParameters,
 ) -> Result<Vec<InterpolationConstraint>, InterpolationError> {
-    let expected = parameters.resources().constraints();
+    let multiplicities = alloc::vec![parameters.multiplicity(); parameters.code_length()];
+    let constraints = enumerate_constraints(&multiplicities)?;
+    if constraints.len() != parameters.resources().constraints() {
+        return Err(InterpolationError::InvalidResult {
+            reason: "constraint enumeration disagrees with the parameter count",
+        });
+    }
+    Ok(constraints)
+}
+
+#[cfg(feature = "internals")]
+/// Enumerate the nonuniform lower set: for each point `i` with multiplicity
+/// `s_i`, emit `(i, a, b)` for `a + b < s_i`, point-major, then by increasing
+/// total order, with `X` order decreasing and `Y` order increasing within one
+/// total order — the same ordering the uniform lower set uses.
+fn enumerate_constraints(
+    multiplicities: &[usize],
+) -> Result<Vec<InterpolationConstraint>, InterpolationError> {
+    let total: usize = multiplicities
+        .iter()
+        .map(|&s| s.checked_mul(s + 1).map(|p| p / 2))
+        .try_fold(0usize, |acc, next| {
+            next.and_then(|add| acc.checked_add(add))
+        })
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "reference interpolation constraint count",
+        })?;
     let mut constraints = Vec::new();
     constraints
-        .try_reserve_exact(expected)
+        .try_reserve_exact(total)
         .map_err(|_| ConfigError::AllocationFailed {
             context: "reference interpolation constraints",
-            elements: expected,
+            elements: total,
             element_size: core::mem::size_of::<InterpolationConstraint>(),
         })?;
-    for point_index in 0..parameters.code_length() {
-        for total_order in 0..parameters.multiplicity() {
+    for (point_index, &multiplicity) in multiplicities.iter().enumerate() {
+        for total_order in 0..multiplicity {
             for y_order in 0..=total_order {
                 constraints.push(InterpolationConstraint {
                     point_index,
@@ -275,9 +375,9 @@ pub fn reference_constraints(
             }
         }
     }
-    if constraints.len() != expected {
+    if constraints.len() != total {
         return Err(InterpolationError::InvalidResult {
-            reason: "constraint enumeration disagrees with the parameter count",
+            reason: "constraint enumeration disagrees with the expected count",
         });
     }
     Ok(constraints)
@@ -364,6 +464,21 @@ fn materialize_matrix<F: FieldKernels>(
     points: &[F::Elem],
     values: &[F::Elem],
 ) -> Result<Vec<F::Elem>, InterpolationError> {
+    materialize_matrix_with::<F>(monomials, constraints, |index| {
+        (points[index], values[index])
+    })
+}
+
+/// Fill the Hasse matrix rows: `matrix[row, col]` is the `(x_order, y_order)`
+/// Hasse derivative of monomial `col` evaluated at point `point_index`. The
+/// `coordinate` closure supplies `(x, y)` per point index so the uniform and
+/// nonuniform kernels share the fill loop.
+#[cfg(feature = "internals")]
+fn materialize_matrix_with<F: FieldKernels>(
+    monomials: &[InterpolationMonomial],
+    constraints: &[InterpolationConstraint],
+    coordinate: impl Fn(usize) -> (F::Elem, F::Elem),
+) -> Result<Vec<F::Elem>, InterpolationError> {
     let element_count =
         constraints
             .len()
@@ -398,8 +513,9 @@ fn materialize_matrix<F: FieldKernels>(
 
     for (row, constraint) in constraints.iter().enumerate() {
         if cached_point != Some(constraint.point_index) {
-            fill_powers(&mut x_powers, points[constraint.point_index]);
-            fill_powers(&mut y_powers, values[constraint.point_index]);
+            let (x, y) = coordinate(constraint.point_index);
+            fill_powers(&mut x_powers, x);
+            fill_powers(&mut y_powers, y);
             cached_point = Some(constraint.point_index);
         }
         for (column, monomial) in monomials.iter().enumerate() {
@@ -492,8 +608,16 @@ fn reconstruct<F: FieldKernels>(
     monomials: &[InterpolationMonomial],
     solution: &[F::Elem],
 ) -> Result<BivariatePolynomial<F>, InterpolationError> {
-    let row_count = parameters
-        .y_degree()
+    reconstruct_y_rows::<F>(parameters.y_degree(), monomials, solution)
+}
+
+#[cfg(feature = "internals")]
+fn reconstruct_y_rows<F: FieldKernels>(
+    y_degree: usize,
+    monomials: &[InterpolationMonomial],
+    solution: &[F::Elem],
+) -> Result<BivariatePolynomial<F>, InterpolationError> {
+    let row_count = y_degree
         .checked_add(1)
         .ok_or(ConfigError::GeometryOverflow {
             context: "reference interpolation Y rows",
@@ -544,6 +668,137 @@ fn validate_result<F: FieldKernels>(
                 let x_order = total_order - y_order;
                 if !polynomial
                     .hasse_discrepancy(points[point_index], values[point_index], x_order, y_order)
+                    .is_zero()
+                {
+                    return Err(InterpolationError::ConstraintViolation {
+                        point_index,
+                        x_order,
+                        y_order,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "internals")]
+/// Construct a nonzero interpolation polynomial for a nonuniform-multiplicity
+/// problem with an explicit Hasse matrix.
+///
+/// This is the reference oracle for fast KNH, which consumes a lower set where
+/// each point carries its own multiplicity. The `(1, y_weight)` weighted-degree
+/// and `Y`-degree bounds are exactly those of [`InterpolationProblem`]. The
+/// caller-supplied limits cap the explicit matrix size, keeping this backend
+/// on small geometries like the uniform reference.
+///
+/// When every point shares the same multiplicity `s`, `y_weight = max_degree`,
+/// and the bounds match a [`GsParameters`] tuple, this returns a polynomial
+/// satisfying the same Hasse constraints as [`interpolate_reference`].
+pub fn interpolate_reference_nonuniform<F: FieldKernels>(
+    problem: InterpolationProblem<F::Elem>,
+    limits: ReferenceInterpolationLimits,
+) -> Result<BivariatePolynomial<F>, InterpolationError> {
+    validate_problem(problem)?;
+    let monomials =
+        enumerate_monomials(problem.y_degree, problem.y_weight, problem.weighted_degree)?;
+    let multiplicities = problem
+        .points
+        .iter()
+        .map(|point| point.multiplicity)
+        .collect::<alloc::vec::Vec<_>>();
+    let constraints = enumerate_constraints(&multiplicities)?;
+    let matrix_elements =
+        constraints
+            .len()
+            .checked_mul(monomials.len())
+            .ok_or(ConfigError::GeometryOverflow {
+                context: "reference interpolation matrix elements",
+            })?;
+    enforce_limit(
+        "matrix elements",
+        matrix_elements,
+        limits.max_matrix_elements,
+    )?;
+    let matrix_bytes = matrix_elements
+        .checked_mul(core::mem::size_of::<F::Elem>())
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "reference interpolation matrix bytes",
+        })?;
+    enforce_limit("matrix bytes", matrix_bytes, limits.max_matrix_bytes)?;
+
+    let mut matrix = materialize_matrix_with::<F>(&monomials, &constraints, |index| {
+        (problem.points[index].x, problem.points[index].y)
+    })?;
+    let solution = nonzero_nullspace_vector(&mut matrix, constraints.len(), monomials.len())?;
+    let polynomial = reconstruct_y_rows::<F>(problem.y_degree, &monomials, &solution)?;
+    validate_nonuniform_result(problem, &polynomial)?;
+    Ok(polynomial)
+}
+
+#[cfg(feature = "internals")]
+fn validate_problem<E: Elem>(problem: InterpolationProblem<E>) -> Result<(), InterpolationError> {
+    if problem.points.is_empty() {
+        return Err(InterpolationError::LengthMismatch {
+            expected: 1,
+            points: 0,
+            values: 0,
+        });
+    }
+    for (index, point) in problem.points.iter().enumerate() {
+        if point.multiplicity == 0 {
+            return Err(InterpolationError::InvalidResult {
+                reason: "interpolation multiplicity must be positive",
+            });
+        }
+        if problem
+            .points
+            .iter()
+            .take(index)
+            .any(|other| other.x == point.x)
+        {
+            return Err(InterpolationError::DuplicatePoint {
+                first: problem
+                    .points
+                    .iter()
+                    .position(|other| other.x == point.x)
+                    .unwrap_or(0),
+                second: index,
+            });
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "internals")]
+fn validate_nonuniform_result<F: FieldKernels>(
+    problem: InterpolationProblem<F::Elem>,
+    polynomial: &BivariatePolynomial<F>,
+) -> Result<(), InterpolationError> {
+    if polynomial.is_zero() {
+        return Err(InterpolationError::InvalidResult {
+            reason: "the nullspace vector reconstructed to zero",
+        });
+    }
+    if polynomial
+        .y_degree()
+        .is_some_and(|degree| degree > problem.y_degree)
+    {
+        return Err(InterpolationError::InvalidResult {
+            reason: "Y-degree exceeds the parameter bound",
+        });
+    }
+    if polynomial.weighted_degree(problem.y_weight)? > Some(problem.weighted_degree) {
+        return Err(InterpolationError::InvalidResult {
+            reason: "weighted degree exceeds the parameter bound",
+        });
+    }
+    for (point_index, point) in problem.points.iter().enumerate() {
+        for total_order in 0..point.multiplicity {
+            for y_order in 0..=total_order {
+                let x_order = total_order - y_order;
+                if !polynomial
+                    .hasse_discrepancy(point.x, point.y, x_order, y_order)
                     .is_zero()
                 {
                     return Err(InterpolationError::ConstraintViolation {

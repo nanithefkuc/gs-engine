@@ -8,13 +8,12 @@ use gfm::{PopovLeadingTerm, WeakPopovBasis, WeakPopovScratch, weak_popov_basis_w
 use crate::{BivariatePolynomial, ConfigError, GsParameters, Polynomial};
 
 use super::{
-    InterpolationError, InterpolationPlan, binomial_odd, validate_inputs, validate_result,
+    InterpolationError, InterpolationPlan, ReencodePlan, binomial_odd, validate_inputs,
+    validate_result,
 };
 
-/// Conservative measured crossover in code length for the weak-Popov module backend.
-///
-/// The module backend is ahead at length eight for both GF8/GF16 and
-/// scalar/GFNI. Kötter remains marginally faster for scalar GF16 at length four.
+/// Code-length crossover at or above which weak-Popov module interpolation is
+/// chosen over iterative Kötter. See `BENCHMARKS.md`.
 pub const MODULE_INTERPOLATION_CROSSOVER: usize = 8;
 
 /// Reusable received-interpolant, power, packed-basis, and reduction storage for
@@ -676,5 +675,293 @@ fn resize_zeroed<T: Clone + Default>(
             })?;
     }
     values.resize(required, T::default());
+    Ok(())
+}
+
+/// Reusable received-word-dependent storage for the re-encoding decode path.
+pub struct ReencodeScratch<F: FieldKernels> {
+    /// Helper interpolant `e(X)` over the re-encoded points.
+    helper: Polynomial<F>,
+    /// Shifted received word `r'_i = r_i + e(alpha_i)`, zero on re-encoded points.
+    shifted_received: Vec<F::Elem>,
+    /// Reduced received values `y_i = r'_i / Psi(alpha_i)` over remaining points.
+    reduced_values: Vec<F::Elem>,
+    /// Reduced interpolant `R̃(X)` over the remaining points.
+    reduced_received: Polynomial<F>,
+    /// Powers `R̃^0 .. R̃^s`.
+    reduced_powers: Vec<Polynomial<F>>,
+    /// Product scratch for module-row construction and reconstruction.
+    product: Polynomial<F>,
+    /// Division-remainder scratch for factor reconstruction.
+    remainder: Polynomial<F>,
+    /// Packed reduced-module basis slab.
+    basis: ModuleSlab<F>,
+    /// Weak-Popov reduction scratch.
+    reduction: WeakPopovScratch,
+    /// Materialized reduced interpolation polynomial `A(X,Y)`.
+    reduced_output: BivariatePolynomial<F>,
+}
+
+impl<F: FieldKernels> ReencodeScratch<F> {
+    /// Construct empty reusable re-encoding scratch.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            helper: Polynomial::zero(),
+            shifted_received: Vec::new(),
+            reduced_values: Vec::new(),
+            reduced_received: Polynomial::zero(),
+            reduced_powers: Vec::new(),
+            product: Polynomial::zero(),
+            remainder: Polynomial::zero(),
+            basis: ModuleSlab::new(),
+            reduction: WeakPopovScratch::new(),
+            reduced_output: BivariatePolynomial::zero(),
+        }
+    }
+
+    /// The prepared helper interpolant added back to shifted candidates.
+    pub(crate) fn helper(&self) -> &Polynomial<F> {
+        &self.helper
+    }
+
+    /// Retained factor-reduced basis, power, and reduction capacity in bytes.
+    #[cfg(feature = "internals")]
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.basis.retained_bytes()
+            + self.helper.retained_capacity_bytes()
+            + self.reduced_received.retained_capacity_bytes()
+            + self.product.retained_capacity_bytes()
+            + self.remainder.retained_capacity_bytes()
+            + self
+                .reduced_powers
+                .iter()
+                .map(Polynomial::retained_capacity_bytes)
+                .sum::<usize>()
+            + self.reduced_powers.capacity() * core::mem::size_of::<Polynomial<F>>()
+            + self.shifted_received.capacity() * core::mem::size_of::<F::Elem>()
+            + self.reduced_values.capacity() * core::mem::size_of::<F::Elem>()
+            + self.reduction.capacity() * core::mem::size_of::<Option<usize>>()
+    }
+}
+
+impl<F: FieldKernels> Default for ReencodeScratch<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Interpolate the re-encoded, factor-reduced Guruswami–Sudan module.
+///
+/// Builds the reduced module over the remaining support from the prepared
+/// re-encoding invariants and the shifted received word, reduces it to weak
+/// Popov form, and reconstructs a full interpolation polynomial `Q(X,Y)` that
+/// satisfies the direct multiplicity constraints of the shifted problem. The
+/// helper interpolant is left in `scratch` for the caller to add back to each
+/// extracted candidate.
+pub(crate) fn interpolate_reencoded_into<F: FieldKernels>(
+    parameters: GsParameters,
+    points: &[F::Elem],
+    received: &[F::Elem],
+    plan: &ReencodePlan<F>,
+    scratch: &mut ReencodeScratch<F>,
+    output: &mut BivariatePolynomial<F>,
+) -> Result<(), InterpolationError> {
+    validate_inputs(parameters, points, received)?;
+    let message_len = plan.message_len;
+    let multiplicity = parameters.multiplicity();
+    let point_count = points.len();
+    let remaining = point_count - message_len;
+
+    // Helper interpolant e(X) over the re-encoded points.
+    interpolate_received_into(
+        &points[..message_len],
+        &received[..message_len],
+        &plan.helper_partials,
+        &plan.helper_denominators,
+        &mut scratch.helper,
+    )?;
+
+    // Shifted received word r'_i = r_i + e(alpha_i); reduced values y_i = r'_i / Psi(alpha_i).
+    ensure_elements(
+        &mut scratch.shifted_received,
+        point_count,
+        "re-encoding shifted received",
+    )?;
+    ensure_elements(
+        &mut scratch.reduced_values,
+        remaining,
+        "re-encoding reduced values",
+    )?;
+    for (index, (&point, &symbol)) in points.iter().zip(received).enumerate() {
+        scratch.shifted_received[index] = symbol.add(scratch.helper.evaluate(point));
+    }
+    for offset in 0..remaining {
+        scratch.reduced_values[offset] =
+            scratch.shifted_received[message_len + offset].mul(plan.inv_psi_at_remaining[offset]);
+    }
+
+    // Reduced interpolant R̃(X) and its powers.
+    interpolate_received_into(
+        &points[message_len..],
+        &scratch.reduced_values[..remaining],
+        &plan.reduced_partials,
+        &plan.reduced_denominators,
+        &mut scratch.reduced_received,
+    )?;
+    fill_polynomial_powers(
+        &scratch.reduced_received,
+        multiplicity,
+        &mut scratch.reduced_powers,
+    )?;
+
+    // Build and reduce the factor-aware module.
+    scratch.basis.prepare(parameters)?;
+    for row in 0..scratch.basis.rows {
+        reduced_module_row_into(
+            row,
+            multiplicity,
+            &scratch.reduced_powers,
+            &plan.psi_powers,
+            &plan.grem_powers,
+            &mut scratch.product,
+            &mut scratch.basis,
+        )?;
+        scratch.basis.recompute_leading(row, &plan.reduced_shifts)?;
+    }
+    weak_popov_basis_with_scratch::<F, _>(
+        &mut scratch.basis,
+        &plan.reduced_shifts,
+        &mut scratch.reduction,
+    )?;
+
+    // Select the minimal shifted-degree row and reconstruct Q from A.
+    let mut selected: Option<(usize, (usize, usize))> = None;
+    for (row, leading) in scratch.basis.leading.iter().copied().enumerate() {
+        let Some(leading) = leading else {
+            continue;
+        };
+        let key = (leading.shifted_degree, leading.column);
+        if selected.is_none_or(|(_, selected_key)| key < selected_key) {
+            selected = Some((row, key));
+        }
+    }
+    let row = selected
+        .map(|(row, _)| row)
+        .ok_or(InterpolationError::InvalidResult {
+            reason: "reduced re-encoding module has no nonzero row",
+        })?;
+    scratch
+        .basis
+        .materialize(row, &mut scratch.reduced_output)?;
+    reconstruct_reencoded(
+        parameters,
+        plan,
+        &scratch.reduced_output,
+        &mut scratch.remainder,
+        output,
+    )?;
+
+    // Verify the reconstructed Q against the shifted problem's constraints.
+    validate_result(parameters, points, &scratch.shifted_received, output)?;
+    Ok(())
+}
+
+/// Populate one row of the factor-reduced module basis.
+///
+/// Rows `b < s` carry `G_rem^{s-b} (Y + R̃)^b`; rows `b >= s` carry
+/// `Psi^{b-s} Y^{b-s} (Y + R̃)^s`. The `Psi^{b-s}` prefactor is exactly the
+/// re-encoding factor divided out during reconstruction. Characteristic-two
+/// Lucas parity (`binomial_odd`) skips every provably zero binomial term.
+fn reduced_module_row_into<F: FieldKernels>(
+    row: usize,
+    multiplicity: usize,
+    reduced_powers: &[Polynomial<F>],
+    psi_powers: &[Polynomial<F>],
+    grem_powers: &[Polynomial<F>],
+    product: &mut Polynomial<F>,
+    basis: &mut ModuleSlab<F>,
+) -> Result<(), ConfigError> {
+    if row < multiplicity {
+        let grem = &grem_powers[multiplicity - row];
+        for y in 0..=row {
+            if binomial_odd(row, y) {
+                reduced_powers[row - y].multiply_into(grem, product)?;
+                basis.set_column(row, y, product)?;
+            }
+        }
+    } else {
+        let psi = &psi_powers[row - multiplicity];
+        let shift = row - multiplicity;
+        for y in 0..=multiplicity {
+            if binomial_odd(multiplicity, y) {
+                psi.multiply_into(&reduced_powers[multiplicity - y], product)?;
+                basis.set_column(row, shift + y, product)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reconstruct the full interpolation polynomial from the reduced one.
+///
+/// `Q_b = Psi^{s-b} A_b` for `b <= s` and `Q_b = A_b / Psi^{b-s}` for `b > s`;
+/// the latter division is exact because the re-encoded coordinates force the
+/// prefactor into every reduced row.
+fn reconstruct_reencoded<F: FieldKernels>(
+    parameters: GsParameters,
+    plan: &ReencodePlan<F>,
+    reduced: &BivariatePolynomial<F>,
+    remainder: &mut Polynomial<F>,
+    output: &mut BivariatePolynomial<F>,
+) -> Result<(), InterpolationError> {
+    let multiplicity = parameters.multiplicity();
+    let row_count = parameters
+        .y_degree()
+        .checked_add(1)
+        .ok_or(ConfigError::GeometryOverflow {
+            context: "re-encoding reconstruction row count",
+        })?;
+    output.prepare_y_rows(row_count)?;
+    for column in 0..row_count {
+        let target = output.y_coefficient_mut(column);
+        target.set_zero();
+        let Some(reduced_row) = reduced.y_coefficient(column) else {
+            continue;
+        };
+        if reduced_row.is_zero() {
+            continue;
+        }
+        if column <= multiplicity {
+            plan.psi_powers[multiplicity - column].multiply_into(reduced_row, target)?;
+        } else {
+            reduced_row.div_rem_into(&plan.psi_powers[column - multiplicity], target, remainder)?;
+            if !remainder.is_zero() {
+                return Err(InterpolationError::InvalidResult {
+                    reason: "re-encoding factor division left a nonzero remainder",
+                });
+            }
+        }
+    }
+    output.normalize();
+    Ok(())
+}
+
+fn ensure_elements<E: Elem>(
+    values: &mut Vec<E>,
+    required: usize,
+    context: &'static str,
+) -> Result<(), ConfigError> {
+    if values.capacity() < required {
+        values
+            .try_reserve(required - values.len())
+            .map_err(|_| ConfigError::AllocationFailed {
+                context,
+                elements: required,
+                element_size: core::mem::size_of::<E>(),
+            })?;
+    }
+    values.resize(required, E::ZERO);
     Ok(())
 }
