@@ -706,6 +706,7 @@ fn materialize_candidates<F: ButterflyKernels>(
         context: "Alekhnovich field order",
     })?;
     let mut candidates = Vec::new();
+    let mut branch = Vec::new();
 
     for family in families {
         if family
@@ -733,19 +734,15 @@ fn materialize_candidates<F: ButterflyKernels>(
             y_degree,
         )?;
 
-        for ordinal in 0..completion_count {
-            let mut candidate = family.prefix.clone();
-            let mut digits = ordinal;
-            for degree in family.tail_degree..coefficient_count {
-                let key = digits % field_order;
-                digits /= field_order;
-                candidate.set_coefficient(degree, element_from_key::<F>(key))?;
-            }
-            if !polynomial.has_root(&candidate)? {
-                return Err(RootError::FactorizationInvariant {
-                    reason: "a final Alekhnovich affine family contained a nonroot",
-                });
-            }
+        materialize_family(
+            polynomial,
+            &family,
+            coefficient_count,
+            field_order,
+            completion_count,
+            &mut branch,
+        )?;
+        for candidate in branch.drain(..) {
             if !candidates.iter().any(|existing| existing == &candidate) {
                 candidates
                     .try_reserve(1)
@@ -774,6 +771,48 @@ fn materialize_candidates<F: ButterflyKernels>(
         }
     }
     Ok(candidates)
+}
+
+/// Complete and verify one affine family's bounded roots into `branch`.
+///
+/// Each affine root family is an independent branch: expanding its free tail
+/// coefficients and checking `Q(X, f(X)) == 0` depends only on the family and
+/// the interpolation polynomial, never on sibling families. This is the unit
+/// prepared for optional parallel execution — [`materialize_candidates`] merges
+/// branches sequentially so deduplication and the cumulative output/`Y`-degree
+/// limits keep their exact failure behavior.
+fn materialize_family<F: ButterflyKernels>(
+    polynomial: &BivariatePolynomial<F>,
+    family: &AffineRootFamily<F>,
+    coefficient_count: usize,
+    field_order: usize,
+    completion_count: usize,
+    branch: &mut Vec<Polynomial<F>>,
+) -> Result<(), RootError> {
+    branch.clear();
+    for ordinal in 0..completion_count {
+        let mut candidate = family.prefix.clone();
+        let mut digits = ordinal;
+        for degree in family.tail_degree..coefficient_count {
+            let key = digits % field_order;
+            digits /= field_order;
+            candidate.set_coefficient(degree, element_from_key::<F>(key))?;
+        }
+        if !polynomial.has_root(&candidate)? {
+            return Err(RootError::FactorizationInvariant {
+                reason: "a final Alekhnovich affine family contained a nonroot",
+            });
+        }
+        branch
+            .try_reserve(1)
+            .map_err(|_| ConfigError::AllocationFailed {
+                context: "Alekhnovich family completions",
+                elements: branch.len() + 1,
+                element_size: core::mem::size_of::<Polynomial<F>>(),
+            })?;
+        branch.push(candidate);
+    }
+    Ok(())
 }
 
 fn checked_power(base: usize, exponent: usize) -> Result<usize, RootError> {
