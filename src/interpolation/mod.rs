@@ -14,7 +14,9 @@ pub use koetter::{
 pub use module::{
     MODULE_INTERPOLATION_CROSSOVER, ModuleScratch, interpolate_module, interpolate_module_into,
 };
+pub(crate) use module::{ReencodeScratch, interpolate_reencoded_into};
 pub use plan::InterpolationPlan;
+pub(crate) use plan::ReencodePlan;
 
 #[cfg(feature = "internals")]
 use alloc::vec::Vec;
