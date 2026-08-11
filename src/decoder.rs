@@ -1,6 +1,9 @@
 use alloc::vec::Vec;
 use core::fmt;
 
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
 use butterfly_fft::core::kernel::ButterflyKernels;
 use butterfly_fft::error::TransformLengthError;
 
@@ -37,6 +40,15 @@ pub enum DecodeError {
     InternalInvariant {
         /// Static explanation of the invariant.
         reason: &'static str,
+    },
+    /// Batch slices have mismatched lengths.
+    BatchLengthMismatch {
+        /// Number of received words supplied.
+        received: usize,
+        /// Number of scratch buffers supplied.
+        scratches: usize,
+        /// Number of output buffers supplied.
+        outputs: usize,
     },
 }
 
@@ -85,6 +97,14 @@ impl fmt::Display for DecodeError {
             Self::InternalInvariant { reason } => {
                 write!(formatter, "decoder invariant failed: {reason}")
             }
+            Self::BatchLengthMismatch {
+                received,
+                scratches,
+                outputs,
+            } => write!(
+                formatter,
+                "batch length mismatch: {received} received words, {scratches} scratches, {outputs} outputs"
+            ),
         }
     }
 }
@@ -325,6 +345,86 @@ impl<F: ButterflyKernels> GsPlan<F> {
             return Err(error);
         }
         Ok(output.len())
+    }
+
+    /// Decode several received words sharing this one prepared plan.
+    ///
+    /// `received[i]`, `scratches[i]`, and `outputs[i]` form one independent
+    /// job: the immutable plan is shared across all jobs, but no scratch or
+    /// output buffer crosses jobs. Above
+    /// [`PARALLEL_BATCH_CROSSOVER`](crate::PARALLEL_BATCH_CROSSOVER) words the
+    /// jobs spread across the Rayon pool; below it (or without the `parallel`
+    /// feature) they decode in order on the calling thread.
+    ///
+    /// On success, `outputs[i]` holds exactly the candidates for
+    /// `received[i]`; the returned total is the sum of per-word counts. Output
+    /// is byte-identical to calling `decode_into` per word, in order,
+    /// regardless of the thread schedule: every job writes only its own
+    /// output slot.
+    ///
+    /// The three slices must have equal length; a mismatch errors before any
+    /// work runs.
+    pub fn decode_batch_into(
+        &self,
+        received: &[&[F::Elem]],
+        scratches: &mut [DecodeScratch<F>],
+        outputs: &mut [Vec<Polynomial<F>>],
+    ) -> Result<usize, DecodeError>
+    where
+        F: crate::ParallelField,
+        F::Elem: crate::ParallelElem,
+    {
+        let count = received.len();
+        if scratches.len() != count || outputs.len() != count {
+            return Err(DecodeError::BatchLengthMismatch {
+                received: count,
+                scratches: scratches.len(),
+                outputs: outputs.len(),
+            });
+        }
+
+        #[cfg(feature = "parallel")]
+        {
+            if count >= crate::PARALLEL_BATCH_CROSSOVER {
+                // Collect the first error in index order; rayon guarantees the
+                // leftmost error for a `Result` collect over an indexed
+                // parallel iterator, so the reported failure is deterministic
+                // across schedules. Each closure borrows the shared `&self`
+                // plan and a unique `&mut` slot, so no two tasks touch the same
+                // scratch or output.
+                let results: Vec<Result<usize, DecodeError>> = received
+                    .par_iter()
+                    .zip_eq(scratches)
+                    .zip_eq(outputs)
+                    .map(|((&word, scratch), output)| {
+                        self.decode_into(word, scratch, output)
+                    })
+                    .collect();
+                return Self::collect_batch(results);
+            }
+        }
+
+        let mut total = 0_usize;
+        for (i, word) in received.iter().enumerate() {
+            total = total
+                .checked_add(self.decode_into(word, &mut scratches[i], &mut outputs[i])?)
+                .ok_or(ConfigError::GeometryOverflow {
+                    context: "batch candidate count",
+                })?;
+        }
+        Ok(total)
+    }
+
+    /// Fold a parallel batch of per-job results into one aggregate.
+    #[cfg(feature = "parallel")]
+    fn collect_batch(results: Vec<Result<usize, DecodeError>>) -> Result<usize, DecodeError> {
+        let mut total = 0_usize;
+        for result in results {
+            total = total.checked_add(result?).ok_or(ConfigError::GeometryOverflow {
+                context: "batch candidate count",
+            })?;
+        }
+        Ok(total)
     }
 }
 
