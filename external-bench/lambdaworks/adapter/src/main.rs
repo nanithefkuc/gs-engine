@@ -1,11 +1,11 @@
-//! `lambdaworks-gs` — WP5 external-decoder comparison adapter, native-prime track.
+//! `lambdaworks-gs` — external-decoder comparison adapter, native-prime track.
 //!
 //! lambdaworks' Reed-Solomon Guruswami-Sudan example
 //! (`examples/reed-solomon-codes`) decodes over the **BabyBear** prime STARK
 //! field, `p = 2^31 - 2^27 + 1 = 2013265921` (`Babybear31PrimeField`). The
 //! canonical `.gsf` corpus is defined over the binary fields GF(2^8)/GF(2^16),
 //! whose characteristic-2 arithmetic is not representable in that native prime
-//! track. Per the WP5 plan this baseline is a native-prime CONTEXTUAL reference,
+//! track. This baseline is a native-prime CONTEXTUAL reference,
 //! not a matched binary-field comparator, so this adapter emits a loud, honest
 //! `unsupported` rejection for every binary fixture and NEVER fabricates
 //! candidates.

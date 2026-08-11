@@ -1,7 +1,7 @@
 # Percy++ GS adapter (percyxx-gs) — notes
 
 Standalone C++ executable wrapping Percy++'s `RSDecoder_GF2E` Guruswami-Sudan
-decoder (Kotter interpolation + Roth-Ruckenstein root finding) for the WP5
+decoder (Kotter interpolation + Roth-Ruckenstein root finding) for the
 `.gsf` / `.gso` protocol. Links only NTL + GMP + the Percy++ RS-decoder support
 objects; **never** the PIR client/server (`percyclient.cc`, `percyserver.cc`,
 `pirclient.cc`, `pirserver.cc`, `distserver.cc`, `threadedserver.cc`). No GPL

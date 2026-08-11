@@ -1,4 +1,4 @@
-//! Domain-specialized interpolation tests (roadmap work package 3).
+//! Domain-specialized interpolation tests.
 //!
 //! Verify that additive-subspace and affine-coset domains produce the same
 //! received-word interpolant `R` and vanishing polynomial `G` as the arbitrary

@@ -1,4 +1,4 @@
-# lambdaworks GS adapter — WP5 baseline notes
+# lambdaworks GS adapter — baseline notes
 
 **Baseline label: `native-prime`** (contextual reference, not a matched
 binary-field comparator).

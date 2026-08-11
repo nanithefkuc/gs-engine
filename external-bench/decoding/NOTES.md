@@ -1,6 +1,6 @@
 # decoding-gs adapter notes
 
-Standalone WP5 `.gso` comparison adapter wrapping Guillaume Quintin's **DECODING
+Standalone `.gso` comparison adapter wrapping Guillaume Quintin's **DECODING
 0.4** (GPL). The GPL library is linked **only** into this separate executable
 (`decoding-gs`); it is never a dependency of the MIT `gs-engine` crate or the
 Rust controller.

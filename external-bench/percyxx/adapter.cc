@@ -1,6 +1,6 @@
 // percyxx-gs: standalone Guruswami-Sudan adapter wrapping Percy++'s
 // RSDecoder_GF2E (Kotter interpolation + Roth-Ruckenstein factorization) for
-// the WP5 .gsf protocol. Links only NTL + the Percy++ RS-decoder support
+// the `.gsf` protocol. Links only NTL + the Percy++ RS-decoder support
 // objects; never the PIR client/server.
 //
 // Field mapping: gf8 is the identity (NTL GF2E with the AES modulus 0x11B is

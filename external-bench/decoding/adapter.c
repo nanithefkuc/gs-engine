@@ -1,9 +1,9 @@
 /*
- * WP5 DECODING adapter: decoding-gs
+ * DECODING adapter: decoding-gs
  *
  * Standalone comparison adapter for the gs-engine external benchmark harness.
  * It adapts Guillaume Quintin's DECODING library (GPL, linked ONLY into this
- * separate executable) to the .gso protocol described in the WP5 contract.
+ * separate executable) to the `.gso` protocol.
  *
  *   decoding-gs <fixture.gsf>
  *

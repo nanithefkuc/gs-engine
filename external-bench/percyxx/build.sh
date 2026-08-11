@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# WP5 Percy++ GS adapter build: compile only the RS-decoder support TUs
+# Percy++ GS adapter build: compile only the RS-decoder support TUs
 # (never the PIR client/server) and link percyxx-gs against NTL + GMP.
 
 revision=b0cbb083b76ee9d55747954cbdb3b878e1dc24c7
