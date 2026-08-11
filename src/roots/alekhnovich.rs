@@ -6,11 +6,12 @@ use fgf::field::Field;
 
 use crate::{BivariatePolynomial, ConfigError, Polynomial, PolynomialProductScratch};
 
+use super::field_roots::{FieldRootScratch, base_field_roots_into};
 use super::roth_ruckenstein::{
-    RothRuckensteinScratch, compare_polynomials, constant_y_polynomial, enforce_limit,
+    RothRuckensteinScratch, compare_polynomials, constant_y_polynomial_into, enforce_limit,
     roth_ruckenstein_roots_into,
 };
-use super::{BaseFieldRoots, RootError, RothRuckensteinLimits, base_field_roots};
+use super::{RootError, RothRuckensteinLimits};
 
 /// Default weighted-coefficient crossover to Alekhnovich divide-and-conquer.
 ///
@@ -133,6 +134,10 @@ pub struct AlekhnovichScratch<F: ButterflyKernels> {
     products: PolynomialProductScratch<F>,
     transformed: BivariatePolynomial<F>,
     roth: RothRuckensteinScratch<F>,
+    field_roots: FieldRootScratch<F>,
+    constant_y: Polynomial<F>,
+    constant_y_coeffs: Vec<F::Elem>,
+    base_roots: Vec<F::Elem>,
 }
 
 impl<F: ButterflyKernels> AlekhnovichScratch<F> {
@@ -145,6 +150,10 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
             products: PolynomialProductScratch::new(),
             transformed: BivariatePolynomial::zero(),
             roth: RothRuckensteinScratch::new(),
+            field_roots: FieldRootScratch::new(),
+            constant_y: Polynomial::zero(),
+            constant_y_coeffs: Vec::new(),
+            base_roots: Vec::new(),
         }
     }
 
@@ -157,7 +166,7 @@ impl<F: ButterflyKernels> AlekhnovichScratch<F> {
     /// Retained divide-and-conquer frame and Roth–Ruckenstein pool capacity.
     #[must_use]
     pub fn capacity(&self) -> usize {
-        self.frames.capacity() + self.roth.capacity()
+        self.frames.capacity() + self.roth.capacity() + self.field_roots.capacity()
     }
 
     fn clear(&mut self) {
@@ -322,22 +331,28 @@ fn alekhnovich_roots_inner<F: ButterflyKernels>(
                         family_bytes,
                         limits,
                     )?;
-                    let constant_y = constant_y_polynomial(&frame.polynomial)?;
-                    let roots = match base_field_roots(&constant_y)? {
-                        BaseFieldRoots::All => {
-                            return Err(RootError::FactorizationInvariant {
-                                reason: "an X-normalized Alekhnovich node has zero constant-X row",
-                            });
-                        }
-                        BaseFieldRoots::Finite(roots) => roots,
-                    };
+                    constant_y_polynomial_into(
+                        &frame.polynomial,
+                        &mut scratch.constant_y_coeffs,
+                        &mut scratch.constant_y,
+                    )?;
+                    let all_field = base_field_roots_into(
+                        &scratch.constant_y,
+                        &mut scratch.field_roots,
+                        &mut scratch.base_roots,
+                    )?;
+                    if all_field {
+                        return Err(RootError::FactorizationInvariant {
+                            reason: "an X-normalized Alekhnovich node has zero constant-X row",
+                        });
+                    }
                     let mut families = Vec::new();
                     reserve_exact::<AffineRootFamily<F>>(
                         &mut families,
-                        roots.len(),
+                        scratch.base_roots.len(),
                         "Alekhnovich scalar root families",
                     )?;
-                    for root in roots {
+                    for &root in &scratch.base_roots {
                         insert_family(
                             &mut families,
                             AffineRootFamily::new(Polynomial::constant(root)?, 1),

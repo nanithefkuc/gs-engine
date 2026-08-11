@@ -4,7 +4,6 @@ use core::cmp::Ordering;
 use fgf::field::Elem;
 use fgf::kernel::FieldKernels;
 
-use crate::geometry::try_zeroed;
 use crate::{BivariatePolynomial, ConfigError, Polynomial};
 
 use super::RootError;
@@ -359,7 +358,7 @@ fn fill_frame_roots<F: FieldKernels>(
 }
 
 /// Extract the constant-`X` coefficient of each `Y` row into `out`.
-fn constant_y_polynomial_into<F: FieldKernels>(
+pub(super) fn constant_y_polynomial_into<F: FieldKernels>(
     polynomial: &BivariatePolynomial<F>,
     coeffs: &mut Vec<F::Elem>,
     out: &mut Polynomial<F>,
@@ -385,26 +384,6 @@ fn constant_y_polynomial_into<F: FieldKernels>(
         })
     } else {
         Ok(())
-    }
-}
-
-pub(super) fn constant_y_polynomial<F: FieldKernels>(
-    polynomial: &BivariatePolynomial<F>,
-) -> Result<Polynomial<F>, RootError> {
-    let mut coefficients = try_zeroed::<F::Elem>(
-        "Roth–Ruckenstein constant-X polynomial",
-        polynomial.y_coefficient_count(),
-    )?;
-    for (coefficient, row) in coefficients.iter_mut().zip(polynomial.y_coefficients()) {
-        *coefficient = row.coefficient(0);
-    }
-    let result = Polynomial::from_coefficients(&coefficients)?;
-    if result.is_zero() {
-        Err(RootError::FactorizationInvariant {
-            reason: "an X-normalized polynomial yielded a zero constant-X polynomial",
-        })
-    } else {
-        Ok(result)
     }
 }
 
