@@ -422,6 +422,34 @@ impl<F: FieldKernels> Polynomial<F> {
         self.multiply_truncated_into(other, output_count, out)
     }
 
+    /// Write the characteristic-two square `self^2` into reusable `out`.
+    ///
+    /// In characteristic two `(sum a_i X^i)^2 = sum a_i^2 X^{2i}`: the cross
+    /// terms cancel, so squaring spreads each coefficient to twice its degree
+    /// and squares it in the field. This is `O(deg)` rather than the `O(deg^2)`
+    /// of a general product, and underlies the modular Frobenius in base-field
+    /// factorization.
+    pub(crate) fn square_into(&self, out: &mut Self) -> Result<(), ConfigError> {
+        out.set_zero();
+        let count = self.coefficient_count();
+        if count == 0 {
+            return Ok(());
+        }
+        let output_count = 2 * count - 1;
+        out.resize_coefficients(output_count)?;
+        for degree in 0..count {
+            let coefficient = self.coefficient(degree);
+            if coefficient.is_zero() {
+                continue;
+            }
+            let squared = coefficient.mul(coefficient);
+            let start = 2 * degree * F::BYTES;
+            F::write(&mut out.coefficients[start..start + F::BYTES], squared);
+        }
+        out.normalize();
+        Ok(())
+    }
+
     /// Write the truncated product into reusable output storage.
     pub(crate) fn multiply_truncated_into(
         &self,

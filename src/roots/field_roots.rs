@@ -236,8 +236,7 @@ fn pow_x_field_order_mod<F: FieldKernels>(
         }
         exponent >>= 1;
         if exponent != 0 {
-            mul_mod(
-                &scratch.pow_base,
+            square_mod(
                 &scratch.pow_base,
                 modulus,
                 &mut scratch.pow_base_next,
@@ -315,8 +314,7 @@ fn trace_polynomial_into<F: FieldKernels>(
     for round in 0..extension_degree {
         scratch.trace_acc.add_assign(&scratch.trace_term)?;
         if round + 1 != extension_degree {
-            mul_mod(
-                &scratch.trace_term,
+            square_mod(
                 &scratch.trace_term,
                 modulus,
                 &mut scratch.trace_term_next,
@@ -339,6 +337,19 @@ fn mul_mod<F: FieldKernels>(
     quotient: &mut Polynomial<F>,
 ) -> Result<(), RootError> {
     left.multiply_into(right, product)?;
+    product.div_rem_into(modulus, quotient, out)?;
+    Ok(())
+}
+
+/// Reduce the characteristic-two square `value^2` modulo `modulus` into `out`.
+fn square_mod<F: FieldKernels>(
+    value: &Polynomial<F>,
+    modulus: &Polynomial<F>,
+    out: &mut Polynomial<F>,
+    product: &mut Polynomial<F>,
+    quotient: &mut Polynomial<F>,
+) -> Result<(), RootError> {
+    value.square_into(product)?;
     product.div_rem_into(modulus, quotient, out)?;
     Ok(())
 }
