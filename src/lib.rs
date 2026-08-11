@@ -17,8 +17,8 @@ mod error;
 mod evaluate;
 pub mod geometry;
 pub mod interpolation;
-pub mod params;
 mod parallel;
+pub mod params;
 pub mod poly;
 pub mod roots;
 mod scratch;
@@ -67,10 +67,10 @@ pub use roots::{
 pub use scratch::DecodeScratch;
 
 #[doc(hidden)]
+pub use parallel::ParallelElem;
+#[doc(hidden)]
 pub use parallel::ParallelField;
 #[cfg(feature = "parallel")]
 pub use parallel::{
     PARALLEL_BATCH_CROSSOVER, PARALLEL_ROOT_FAMILY_CROSSOVER, PARALLEL_SCORING_CROSSOVER,
 };
-#[doc(hidden)]
-pub use parallel::ParallelElem;

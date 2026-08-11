@@ -12,7 +12,7 @@ publish = false
 [workspace]
 
 [dependencies]
-gs-engine = { path = "../.." }
+gs-engine = { path = "../..", features = ["parallel"] }
 fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd" }
 
 [[bin]]

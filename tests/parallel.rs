@@ -30,7 +30,11 @@ fn plan_is_shareable_across_threads() {
 }
 
 /// A small but real decode geometry: `n = 15`, `k = 4`, two errors, four words.
-fn sample_plan() -> (GsPlan<Gf16>, Vec<[<Gf16 as Field>::Elem; 15]>, Polynomial<Gf16>) {
+fn sample_plan() -> (
+    GsPlan<Gf16>,
+    Vec<[<Gf16 as Field>::Elem; 15]>,
+    Polynomial<Gf16>,
+) {
     let parameters = GsParameters::new::<Gf16>(
         15,
         4,
@@ -75,13 +79,16 @@ fn decode_batch(
     words: &[[<Gf16 as Field>::Elem; 15]],
 ) -> Vec<Vec<Polynomial<Gf16>>> {
     let received: Vec<&[<Gf16 as Field>::Elem]> = words.iter().map(|w| w.as_slice()).collect();
-    let mut scratches: Vec<DecodeScratch<Gf16>> = (0..words.len()).map(|_| DecodeScratch::new()).collect();
+    let mut scratches: Vec<DecodeScratch<Gf16>> =
+        (0..words.len()).map(|_| DecodeScratch::new()).collect();
     let mut outputs: Vec<Vec<Polynomial<Gf16>>> = (0..words.len()).map(|_| Vec::new()).collect();
     for (i, word) in words.iter().enumerate() {
-        plan.prepare_scratch(&mut scratches[i], &mut outputs[i]).unwrap();
+        plan.prepare_scratch(&mut scratches[i], &mut outputs[i])
+            .unwrap();
         let _ = word;
     }
-    plan.decode_batch_into(&received, &mut scratches, &mut outputs).unwrap();
+    plan.decode_batch_into(&received, &mut scratches, &mut outputs)
+        .unwrap();
     outputs
 }
 
@@ -103,7 +110,10 @@ fn batch_matches_word_by_word_decode() {
     assert_eq!(outputs.len(), per_word.len());
     for (batch, single) in outputs.iter().zip(&per_word) {
         assert_eq!(batch, single, "batch and single-thread output differ");
-        assert!(batch.contains(&message), "message missing from batch output");
+        assert!(
+            batch.contains(&message),
+            "message missing from batch output"
+        );
     }
 }
 
@@ -134,7 +144,8 @@ fn batch_is_deterministic_across_schedules() {
 fn batch_rejects_mismatched_slices() {
     let (plan, words, _message) = sample_plan();
     let received: Vec<&[<Gf16 as Field>::Elem]> = words.iter().map(|w| w.as_slice()).collect();
-    let mut scratches: Vec<DecodeScratch<Gf16>> = (0..words.len()).map(|_| DecodeScratch::new()).collect();
+    let mut scratches: Vec<DecodeScratch<Gf16>> =
+        (0..words.len()).map(|_| DecodeScratch::new()).collect();
     let mut outputs: Vec<Vec<Polynomial<Gf16>>> = (0..words.len()).map(|_| Vec::new()).collect();
     // One too few scratch buffers.
     let err = plan
@@ -142,6 +153,10 @@ fn batch_rejects_mismatched_slices() {
         .unwrap_err();
     assert!(matches!(
         err,
-        gs_engine::DecodeError::BatchLengthMismatch { received: 4, scratches: 3, outputs: 4 }
+        gs_engine::DecodeError::BatchLengthMismatch {
+            received: 4,
+            scratches: 3,
+            outputs: 4
+        }
     ));
 }

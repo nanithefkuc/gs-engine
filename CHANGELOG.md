@@ -16,7 +16,15 @@ releases follow [Semantic Versioning](https://semver.org/).
   rejects mismatched `received`/`scratches`/`outputs` slices before any work
   runs. Single-word `decode_into` and the `no_std` core are unchanged when the
   feature is off; on the reference host a 16-word GF16 `n64` batch decodes
-  ~2.2× faster than sequential per-word decode (see `BENCHMARKS.md`).
+- External harness batch comparison: the controller gains a `bench-batch`
+  subcommand and a `gs-engine-batch-v1` fixture format (documented in
+  `external-bench/fixtures/FORMAT.md`) carrying several received words that
+  share one geometry and expected candidate set. `bench-batch` times
+  `GsPlan::decode_batch_into` (parallel, shared plan) against per-word
+  `decode_into` in order (sequential, shared plan) and against the external
+  adapters decoding each word in a separate process — the honest "no batch
+  API" baseline for Percy++ and DECODING. `validate` now accepts batch
+  fixtures and checks every word decodes to the shared set.
 - High-rate re-encoding decode path: `GsPlan` now decodes through a
   factor-reduced Guruswami–Sudan module when the geometry is high-rate and long
   enough. It selects the first `k = w + 1` support points deterministically,

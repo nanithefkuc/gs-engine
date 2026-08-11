@@ -396,9 +396,7 @@ impl<F: ButterflyKernels> GsPlan<F> {
                     .par_iter()
                     .zip_eq(scratches)
                     .zip_eq(outputs)
-                    .map(|((&word, scratch), output)| {
-                        self.decode_into(word, scratch, output)
-                    })
+                    .map(|((&word, scratch), output)| self.decode_into(word, scratch, output))
                     .collect();
                 return Self::collect_batch(results);
             }
@@ -420,9 +418,11 @@ impl<F: ButterflyKernels> GsPlan<F> {
     fn collect_batch(results: Vec<Result<usize, DecodeError>>) -> Result<usize, DecodeError> {
         let mut total = 0_usize;
         for result in results {
-            total = total.checked_add(result?).ok_or(ConfigError::GeometryOverflow {
-                context: "batch candidate count",
-            })?;
+            total = total
+                .checked_add(result?)
+                .ok_or(ConfigError::GeometryOverflow {
+                    context: "batch candidate count",
+                })?;
         }
         Ok(total)
     }

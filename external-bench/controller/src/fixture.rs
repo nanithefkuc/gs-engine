@@ -36,6 +36,14 @@ impl FieldTag {
             FieldTag::Gf16 => "gf8[u]/(u^2+u+0x20);gf8=aes-0x11b;le-components",
         }
     }
+
+    /// Short fixture tag string (`gf8` / `gf16`).
+    pub const fn tag_str(self) -> &'static str {
+        match self {
+            FieldTag::Gf8 => "gf8",
+            FieldTag::Gf16 => "gf16",
+        }
+    }
 }
 
 /// A parsed fixture: decoder input plus its complete expected candidate set.
@@ -71,6 +79,29 @@ pub struct Fixture {
     /// Optional expected codewords, each `n` elements.
     #[allow(dead_code)]
     pub expected_codewords: Vec<Vec<Vec<u8>>>,
+}
+
+/// A parsed batch fixture: shared geometry plus multiple received words that
+/// all decode to the same expected candidate set.
+///
+/// Used by the batch timing comparison (`bench-batch`), which decodes every
+/// word against one shared `gs-engine` plan and compares against $N$ sequential
+/// adapter invocations. The expected set is shared because every word is a
+/// corruption of the same codeword; each word is validated to decode to it.
+#[derive(Clone, Debug)]
+pub struct BatchFixture {
+    /// Inherited from the single-word shape.
+    pub inner: Fixture,
+    /// Received words, each `n` elements. Always non-empty.
+    pub received_words: Vec<Vec<Vec<u8>>>,
+}
+
+impl BatchFixture {
+    /// Number of received words in the batch.
+    #[must_use]
+    pub fn word_count(&self) -> usize {
+        self.received_words.len()
+    }
 }
 
 const SINGLETONS: [&str; 12] = [
@@ -231,6 +262,205 @@ pub fn parse(text: &str) -> Result<Fixture, String> {
         received,
         expected_candidates,
         expected_codewords,
+    })
+}
+
+/// Parse a `.gsf` batch document (header `gs-engine-batch-v1`).
+///
+/// The geometry singletons are the same as version 1, except `received` is
+/// replaced by `received-words=<count>` followed by exactly that many
+/// `received-word=` records (each `n` elements). The `expected-candidate` set
+/// is shared: every word in the batch is a corruption of the same codeword and
+/// decodes to it, so the batch does uniform work across all words.
+pub fn parse_batch(text: &str) -> Result<BatchFixture, String> {
+    if !text.ends_with('\n') {
+        return Err("file must end with exactly one LF byte".into());
+    }
+    if text.ends_with("\n\n") {
+        return Err("trailing blank line is invalid".into());
+    }
+    let mut lines = text.split('\n');
+    let header = lines.next().ok_or("empty file")?;
+    if header != "gs-engine-batch-v1" {
+        return Err(format!("bad version header {header:?} (expected gs-engine-batch-v1)"));
+    }
+    let mut rest: Vec<&str> = lines.collect();
+    let last = rest.pop();
+    if last != Some("") {
+        return Err("file must end with exactly one LF byte".into());
+    }
+    for line in &rest {
+        if line.is_empty() {
+            return Err("blank lines are invalid".into());
+        }
+        if line.starts_with('#') {
+            return Err("comments are invalid".into());
+        }
+        if *line != line.trim() {
+            return Err(format!("stray whitespace in line {line:?}"));
+        }
+    }
+    let records: Vec<(&str, &str)> = rest
+        .iter()
+        .map(|line| {
+            line.split_once('=')
+                .ok_or_else(|| format!("record without '=': {line:?}"))
+        })
+        .collect::<Result<_, _>>()?;
+    for (key, value) in &records {
+        if *value != value.trim() {
+            return Err(format!("whitespace around value in line {key:?}"));
+        }
+    }
+
+    // The first 11 singletons are shared with v1 (everything up to but not
+    // including `received`).
+    let batch_singletons = &SINGLETONS[..11];
+    let mut fields = std::collections::HashMap::new();
+    let mut cursor = 0;
+    let mut index = 0;
+    while index < records.len() && cursor < batch_singletons.len() {
+        let (key, value) = records[index];
+        if key != batch_singletons[cursor] {
+            return Err(format!(
+                "expected key {:?} but found {key:?}",
+                batch_singletons[cursor]
+            ));
+        }
+        if fields.insert(key, value).is_some() {
+            return Err(format!("duplicate singleton {key:?}"));
+        }
+        cursor += 1;
+        index += 1;
+    }
+    if cursor != batch_singletons.len() {
+        return Err(format!(
+            "missing required key {:?}",
+            batch_singletons[cursor]
+        ));
+    }
+
+    let field = match fields["field"] {
+        "gf8" => FieldTag::Gf8,
+        "gf16" => FieldTag::Gf16,
+        other => return Err(format!("unknown field {other:?}")),
+    };
+    match fields["domain"] {
+        "arbitrary" | "additive" | "affine" => {}
+        other => return Err(format!("unknown domain {other:?}")),
+    }
+    let field_definition = fields["field-definition"].to_string();
+    if field_definition != field.canonical_definition() {
+        return Err(format!(
+            "field-definition {field_definition:?} is not the canonical {:?}",
+            field.canonical_definition()
+        ));
+    }
+    let n = parse_usize(fields["n"], "n")?;
+    let k = parse_usize(fields["k"], "k")?;
+    let target_radius = parse_usize(fields["target-radius"], "target-radius")?;
+    let multiplicity = parse_usize(fields["multiplicity"], "multiplicity")?;
+    let y_degree = parse_usize(fields["y-degree"], "y-degree")?;
+    let weighted_degree = parse_usize(fields["weighted-degree"], "weighted-degree")?;
+    let support = parse_elements(fields["support"], field, "support")?;
+    if support.len() != n {
+        return Err(format!("support has {} elements, expected n={n}", support.len()));
+    }
+
+    // `received-words=<count>` then exactly that many `received-word=` records,
+    // then `expected-candidate=` records.
+    let (rw_key, rw_value) = records
+        .get(index)
+        .ok_or("missing received-words record")?;
+    if *rw_key != "received-words" {
+        return Err(format!(
+            "expected key \"received-words\" but found {rw_key:?}"
+        ));
+    }
+    let word_count = parse_usize(rw_value, "received-words")?;
+    if word_count == 0 {
+        return Err("received-words must be at least 1".into());
+    }
+    index += 1;
+
+    let mut received_words: Vec<Vec<Vec<u8>>> = Vec::with_capacity(word_count);
+    let mut seen_word = 0;
+    while index < records.len() && seen_word < word_count {
+        let (key, value) = records[index];
+        if key != "received-word" {
+            return Err(format!("expected \"received-word\" but found {key:?}"));
+        }
+        let word = parse_elements(value, field, "received-word")?;
+        if word.len() != n {
+            return Err(format!(
+                "received-word {} has {} elements, expected n={n}",
+                seen_word + 1,
+                word.len()
+            ));
+        }
+        received_words.push(word);
+        seen_word += 1;
+        index += 1;
+    }
+    if seen_word != word_count {
+        return Err(format!(
+            "received-words={word_count} but only {seen_word} received-word records present"
+        ));
+    }
+
+    // Remaining records: expected-candidate (shared), then optional codewords.
+    let mut expected_candidates = Vec::new();
+    let mut expected_codewords = Vec::new();
+    let mut seen_codeword = false;
+    for &(key, value) in &records[index..] {
+        match key {
+            "expected-candidate" => {
+                if seen_codeword {
+                    return Err("expected-candidate after expected-codeword".into());
+                }
+                let candidate = parse_elements(value, field, "expected-candidate")?;
+                validate_candidate(&candidate, field)?;
+                expected_candidates.push(candidate);
+            }
+            "expected-codeword" => {
+                seen_codeword = true;
+                let codeword = parse_elements(value, field, "expected-codeword")?;
+                if codeword.len() != n {
+                    return Err(format!(
+                        "expected-codeword has {} elements, expected n={n}",
+                        codeword.len()
+                    ));
+                }
+                expected_codewords.push(codeword);
+            }
+            other => return Err(format!("unknown key {other:?}")),
+        }
+    }
+    if expected_candidates.is_empty() {
+        return Err("at least one expected-candidate is required".into());
+    }
+
+    let inner = Fixture {
+        name: fields["name"].to_string(),
+        field,
+        field_definition,
+        domain: fields["domain"].to_string(),
+        n,
+        k,
+        target_radius,
+        multiplicity,
+        y_degree,
+        weighted_degree,
+        support,
+        // The inner `received` carries the first word so existing single-word
+        // code paths (e.g. `reference::decode`) work unchanged on it.
+        received: received_words[0].clone(),
+        expected_candidates,
+        expected_codewords,
+    };
+    Ok(BatchFixture {
+        inner,
+        received_words,
     })
 }
 

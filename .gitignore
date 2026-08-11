@@ -2,4 +2,6 @@
 .plans/
 /external-bench/sources/
 /external-bench/controller/target/
-/external-bench/results/
+/external-bench/decoding/decoding-gs
+/external-bench/percyxx/percyxx-gs
+/external-bench/lambdaworks/lambdaworks-gs

@@ -51,7 +51,19 @@ cargo build --release --manifest-path "$controller/Cargo.toml" >/dev/null 2>&1
             printf '%s\n' "  (not built: $exe missing)"
         fi
         echo
+
+    # Batch comparison: gs-engine parallel/sequential vs. adapter sequential
+    # sums, over the batch fixtures only.
+    printf '%s\n' "=== batch comparison (gs-engine parallel/sequential vs adapters) ==="
+    adapters=""
+    for adapter in decoding/decoding-gs percyxx/percyxx-gs lambdaworks/lambdaworks-gs; do
+        exe=$crate_dir/external-bench/$adapter
+        if [ -x "$exe" ]; then
+            adapters="$adapters $exe"
+        fi
     done
+    cargo run --release --manifest-path "$controller/Cargo.toml" -- bench-batch 3 "$fixtures" $adapters 2>&1 || true
+    echo
 } >"$table"
 
 cat "$metadata"
