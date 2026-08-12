@@ -39,8 +39,9 @@ pub(crate) fn score_candidates<F: ButterflyKernels>(
     radius: usize,
     scratch: &mut DecodeScratch<F>,
     output: &mut Vec<Polynomial<F>>,
+    distances: &mut Option<&mut Vec<usize>>,
 ) -> Result<(), DecodeError> {
-    score_candidates_with_strategy(
+    score_dispatch(
         domain,
         received,
         candidates,
@@ -48,12 +49,14 @@ pub(crate) fn score_candidates<F: ButterflyKernels>(
         ScoringStrategy::Auto,
         scratch,
         output,
+        distances,
     )
 }
 
 /// Score candidates with an explicit implementation strategy.
 ///
 /// The forced butterfly-FFT strategy requires an additive or affine domain.
+#[cfg(feature = "internals")]
 pub fn score_candidates_with_strategy<F: ButterflyKernels>(
     domain: &EvaluationDomain<F>,
     received: &[F::Elem],
@@ -63,8 +66,39 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
     scratch: &mut DecodeScratch<F>,
     output: &mut Vec<Polynomial<F>>,
 ) -> Result<(), DecodeError> {
+    score_dispatch(
+        domain,
+        received,
+        candidates,
+        radius,
+        strategy,
+        scratch,
+        output,
+        &mut None,
+    )
+}
+
+/// Score candidates, keeping those within `radius`.
+///
+/// When `distances` is `Some`, each accepted candidate's exact Hamming distance
+/// is recorded into it, in the same order and position as `output`, so a
+/// consumer never re-evaluates an accepted candidate to recover its distance.
+#[allow(clippy::too_many_arguments)]
+fn score_dispatch<F: ButterflyKernels>(
+    domain: &EvaluationDomain<F>,
+    received: &[F::Elem],
+    candidates: &[Polynomial<F>],
+    radius: usize,
+    strategy: ScoringStrategy,
+    scratch: &mut DecodeScratch<F>,
+    output: &mut Vec<Polynomial<F>>,
+    distances: &mut Option<&mut Vec<usize>>,
+) -> Result<(), DecodeError> {
     if candidates.is_empty() {
         output.clear();
+        if let Some(distances) = distances {
+            distances.clear();
+        }
         return Ok(());
     }
     if output.capacity() < candidates.len() {
@@ -93,7 +127,7 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
         ScoringStrategy::ButterflyFft => true,
     };
     if use_fft {
-        score_butterfly_fft(domain, received, candidates, radius, scratch, output)
+        score_butterfly_fft(domain, received, candidates, radius, scratch, output, distances)
     } else {
         score_horner(
             domain.points(),
@@ -102,6 +136,7 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
             radius,
             scratch,
             output,
+            distances,
         )
     }
 }
@@ -113,6 +148,7 @@ fn score_horner<F: ButterflyKernels>(
     radius: usize,
     scratch: &mut DecodeScratch<F>,
     output: &mut Vec<Polynomial<F>>,
+    distances: &mut Option<&mut Vec<usize>>,
 ) -> Result<(), DecodeError> {
     let candidate_count = candidates.len();
     let mut output_count = 0_usize;
@@ -128,11 +164,12 @@ fn score_horner<F: ButterflyKernels>(
                 }
             }
             if distance <= radius {
-                write_candidate(output, output_count, candidate)?;
+                accept_candidate(output, distances, output_count, candidate, distance)?;
                 output_count += 1;
             }
         }
         output.truncate(output_count);
+        truncate_distances(distances, output_count);
         return Ok(());
     }
 
@@ -154,11 +191,12 @@ fn score_horner<F: ButterflyKernels>(
     }
     for (candidate, &distance) in candidates.iter().zip(&scratch.distances[..candidate_count]) {
         if distance <= radius {
-            write_candidate(output, output_count, candidate)?;
+            accept_candidate(output, distances, output_count, candidate, distance)?;
             output_count += 1;
         }
     }
     output.truncate(output_count);
+    truncate_distances(distances, output_count);
     Ok(())
 }
 
@@ -169,6 +207,7 @@ fn score_butterfly_fft<F: ButterflyKernels>(
     radius: usize,
     scratch: &mut DecodeScratch<F>,
     output: &mut Vec<Polynomial<F>>,
+    distances: &mut Option<&mut Vec<usize>>,
 ) -> Result<(), DecodeError> {
     let candidate_count = candidates.len();
     let plan = domain
@@ -251,12 +290,48 @@ fn score_butterfly_fft<F: ButterflyKernels>(
     let mut output_count = 0_usize;
     for (candidate, &distance) in candidates.iter().zip(&scratch.distances[..candidate_count]) {
         if distance <= radius {
-            write_candidate(output, output_count, candidate)?;
+            accept_candidate(output, distances, output_count, candidate, distance)?;
             output_count += 1;
         }
     }
     output.truncate(output_count);
+    truncate_distances(distances, output_count);
     Ok(())
+}
+
+/// Append `candidate` to `output` at `index`, recording its exact Hamming
+/// `distance` into the optional parallel `distances` sink at the same position.
+fn accept_candidate<F: ButterflyKernels>(
+    output: &mut Vec<Polynomial<F>>,
+    distances: &mut Option<&mut Vec<usize>>,
+    index: usize,
+    candidate: &Polynomial<F>,
+    distance: usize,
+) -> Result<(), DecodeError> {
+    write_candidate(output, index, candidate)?;
+    if let Some(distances) = distances {
+        if let Some(slot) = distances.get_mut(index) {
+            *slot = distance;
+        } else {
+            distances
+                .try_reserve(1)
+                .map_err(|_| ConfigError::AllocationFailed {
+                    context: "scored candidate distances",
+                    elements: index + 1,
+                    element_size: core::mem::size_of::<usize>(),
+                })?;
+            distances.push(distance);
+        }
+    }
+    Ok(())
+}
+
+/// Drop any distances left over from a previous, longer candidate list so the
+/// sink length matches the accepted candidate count.
+fn truncate_distances(distances: &mut Option<&mut Vec<usize>>, len: usize) {
+    if let Some(distances) = distances {
+        distances.truncate(len);
+    }
 }
 
 fn write_candidate<F: ButterflyKernels>(
@@ -320,6 +395,7 @@ mod tests {
         let received = vec![gf16(1); domain.len()];
         let mut scratch = DecodeScratch::new();
         let mut output = Vec::new();
+        let mut distances = Vec::new();
 
         score_candidates(
             &domain,
@@ -328,10 +404,14 @@ mod tests {
             0,
             &mut scratch,
             &mut output,
+            &mut Some(&mut distances),
         )
         .unwrap();
 
         assert_eq!(output, &candidates[..1]);
+        // Only the first candidate equals the all-ones received word (distance 0);
+        // its exact distance is recorded in parallel with `output`.
+        assert_eq!(distances, vec![0]);
         assert!(scratch.evaluation_capacity_bytes() >= domain.len() * 4 * Gf16::BYTES);
     }
 }

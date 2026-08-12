@@ -86,6 +86,69 @@ fn decodes_six_errors_beyond_unique_radius_for_15_5_rs() {
 }
 
 #[test]
+fn scored_decode_matches_decode_and_records_exact_distances() {
+    let parameter_limits = ParameterLimits::new(8, 16, usize::MAX, usize::MAX);
+    let parameters = GsParameters::new::<Gf16>(15, 4, 6, 2, 4, 17, parameter_limits).unwrap();
+    let points: Vec<_> = (0..15).map(gf16).collect();
+    let message = polynomial::<Gf16>(&[
+        gf16(0x1234),
+        gf16(0xabcd),
+        gf16(0x0108),
+        gf16(0xbeef),
+        gf16(0x2222),
+    ]);
+    let mut received = message.evaluate_many(&points).unwrap();
+    for (offset, value) in received[9..].iter_mut().enumerate() {
+        *value = value.add(gf16((offset + 1) as u16));
+    }
+
+    let domain = EvaluationDomain::arbitrary(points.clone()).unwrap();
+    let plan = GsPlan::new(parameters, domain, ROOT_LIMITS).unwrap();
+    let mut scratch = DecodeScratch::new();
+
+    // The scored candidates and their order match the plain decode exactly.
+    let mut plain = Vec::new();
+    plan.decode_into(&received, &mut scratch, &mut plain).unwrap();
+    let mut scored = Vec::new();
+    let mut distances = Vec::new();
+    let count = plan
+        .decode_scored_into(&received, &mut scratch, &mut scored, &mut distances)
+        .unwrap();
+    assert_eq!(count, scored.len());
+    assert_eq!(scored, plain);
+
+    // Each recorded distance is the exact Hamming distance of its candidate,
+    // parallel to `scored`, and within the target radius.
+    assert_eq!(distances.len(), scored.len());
+    for (candidate, &recorded) in scored.iter().zip(&distances) {
+        assert_eq!(recorded, distance(candidate, &points, &received));
+        assert!(recorded <= 6);
+    }
+    assert!(scored.contains(&message));
+
+    // A shorter candidate list on a second word truncates the distance sink to
+    // the new length rather than leaving stale entries.
+    let clean = message.evaluate_many(&points).unwrap();
+    plan.decode_scored_into(&clean, &mut scratch, &mut scored, &mut distances)
+        .unwrap();
+    assert_eq!(distances.len(), scored.len());
+    for (candidate, &recorded) in scored.iter().zip(&distances) {
+        assert_eq!(recorded, distance(candidate, &points, &clean));
+    }
+
+    // A received-length mismatch clears both buffers before returning.
+    assert_eq!(
+        plan.decode_scored_into(&[gf16(0); 3], &mut scratch, &mut scored, &mut distances),
+        Err(DecodeError::ReceivedLength {
+            expected: 15,
+            got: 3,
+        })
+    );
+    assert!(scored.is_empty());
+    assert!(distances.is_empty());
+}
+
+#[test]
 fn small_gf8_decode_matches_every_bounded_polynomial_and_butterfly_fft() {
     let parameter_limits = ParameterLimits::new(4, 8, usize::MAX, usize::MAX);
     let parameters = GsParameters::new::<Gf8>(4, 0, 2, 1, 2, 1, parameter_limits).unwrap();

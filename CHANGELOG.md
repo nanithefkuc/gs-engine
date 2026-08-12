@@ -5,6 +5,15 @@ All notable changes to gs-engine are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 releases follow [Semantic Versioning](https://semver.org/).
 ### Added
+- Scored decoding: `GsPlan::decode_scored_into(received, scratch, output,
+  distances)` returns each accepted candidate together with its exact Hamming
+  distance from the received word. `output` matches `decode_into` exactly; the
+  caller-owned `distances` buffer is parallel to it (`distances[i]` is the
+  mismatch count of `output[i]`), shares the deterministic candidate order, and
+  is cleared on entry and on error. The distance is the value the scorer already
+  computes internally and previously discarded, so a consumer that needs it —
+  for example to combine a punctured-code distance with an extra coordinate —
+  no longer re-evaluates every candidate. `decode_into` is unchanged.
 - Optional parallel batch decoding behind the new `parallel` feature
   (default-off, requires `std`). `GsPlan::decode_batch_into` decodes several
   received words against one shared immutable plan, spreading the words across

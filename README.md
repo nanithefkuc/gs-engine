@@ -118,6 +118,11 @@ plan.decode_into(&received, &mut scratch, &mut candidates)?;
 ```
 
 The primary decoding API is `GsPlan::decode_into(received, scratch, output)`.
+`GsPlan::decode_scored_into(received, scratch, output, distances)` decodes
+identically but also fills a caller-owned `distances` buffer parallel to
+`output`, giving each accepted candidate's exact Hamming distance from the
+received word without a second evaluation pass — useful when a caller narrows
+the list with extra coordinates or an admissibility rule of its own.
 For several received words sharing one geometry, `GsPlan::decode_batch_into`
 shares the immutable plan across independent scratch instances and, with the
 `parallel` feature, spreads the words across the Rayon pool above

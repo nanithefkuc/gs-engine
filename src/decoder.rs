@@ -256,8 +256,42 @@ impl<F: ButterflyKernels> GsPlan<F> {
         scratch: &mut DecodeScratch<F>,
         output: &mut Vec<Polynomial<F>>,
     ) -> Result<usize, DecodeError> {
+        self.decode_inner(received, scratch, output, &mut None)
+    }
+
+    /// Decode, returning each accepted candidate with its exact Hamming
+    /// distance from the received word.
+    ///
+    /// Behaves exactly like [`decode_into`](Self::decode_into) for `output`,
+    /// and additionally fills `distances` so that `distances[i]` is the number
+    /// of coordinates where `output[i]` disagrees with `received`. The two
+    /// buffers are parallel and share the deterministic candidate order; both
+    /// are cleared on entry and on error. This exposes the distance the scorer
+    /// already computes, so a consumer never re-evaluates an accepted candidate
+    /// to recover its distance.
+    pub fn decode_scored_into(
+        &self,
+        received: &[F::Elem],
+        scratch: &mut DecodeScratch<F>,
+        output: &mut Vec<Polynomial<F>>,
+        distances: &mut Vec<usize>,
+    ) -> Result<usize, DecodeError> {
+        self.decode_inner(received, scratch, output, &mut Some(distances))
+    }
+
+    /// Shared decode body. When `distances` is `Some`, each accepted
+    /// candidate's exact Hamming distance is recorded in parallel with
+    /// `output`.
+    fn decode_inner(
+        &self,
+        received: &[F::Elem],
+        scratch: &mut DecodeScratch<F>,
+        output: &mut Vec<Polynomial<F>>,
+        distances: &mut Option<&mut Vec<usize>>,
+    ) -> Result<usize, DecodeError> {
         if received.len() != self.parameters.code_length() {
             output.clear();
+            clear_distances(distances);
             return Err(DecodeError::ReceivedLength {
                 expected: self.parameters.code_length(),
                 got: received.len(),
@@ -310,6 +344,7 @@ impl<F: ButterflyKernels> GsPlan<F> {
         };
         if let Err(error) = interpolation {
             output.clear();
+            clear_distances(distances);
             return Err(error);
         }
         if let Err(error) = alekhnovich_roots_into(
@@ -320,12 +355,14 @@ impl<F: ButterflyKernels> GsPlan<F> {
             &mut scratch.root_candidates,
         ) {
             output.clear();
+            clear_distances(distances);
             return Err(error.into());
         }
         if self.reencode.is_some() {
             for candidate in &mut scratch.root_candidates {
                 if let Err(error) = candidate.add_assign(scratch.reencode.helper()) {
                     output.clear();
+                    clear_distances(distances);
                     return Err(error.into());
                 }
             }
@@ -338,10 +375,12 @@ impl<F: ButterflyKernels> GsPlan<F> {
             self.parameters.target_radius(),
             scratch,
             output,
+            distances,
         );
         scratch.root_candidates = candidates;
         if let Err(error) = scoring {
             output.clear();
+            clear_distances(distances);
             return Err(error);
         }
         Ok(output.len())
@@ -425,6 +464,13 @@ impl<F: ButterflyKernels> GsPlan<F> {
                 })?;
         }
         Ok(total)
+    }
+}
+
+/// Clear the optional scored-candidate distance sink on an early return.
+fn clear_distances(distances: &mut Option<&mut Vec<usize>>) {
+    if let Some(distances) = distances {
+        distances.clear();
     }
 }
 
