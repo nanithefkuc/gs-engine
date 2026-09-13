@@ -228,7 +228,7 @@ checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
 [[package]]
 name = "gfm"
 version = "0.0.0"
-source = "git+https://github.com/nanithefkuc/gfm?rev=df76a2796b59c3b2f36b9e7ed5845c353b76bf8e#df76a2796b59c3b2f36b9e7ed5845c353b76bf8e"
+source = "git+https://github.com/nanithefkuc/gfm?rev=3eec6a643b3a88deed7ea05b5e9b2746bceff8f4#3eec6a643b3a88deed7ea05b5e9b2746bceff8f4"
 dependencies = [
  "fgf",
  "poly-ring",
