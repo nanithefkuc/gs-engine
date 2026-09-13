@@ -1,10 +1,10 @@
 use fgf::field::{Elem, Field};
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16};
-use gs_engine::{
-    AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, GsParameters, ParameterLimits,
-    Polynomial, RootError, RothRuckensteinLimits, alekhnovich_roots, interpolate_koetter,
-    roth_ruckenstein_roots,
+use fgf::{Gf8B, Gf16};
+use gs_engine::{GsParameters, ParameterLimits, interpolate_koetter};
+use poly_ring::{
+    AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, Polynomial, RootError,
+    RothRuckensteinLimits, alekhnovich_roots, roth_ruckenstein_roots,
 };
 
 const GENEROUS: RothRuckensteinLimits = RothRuckensteinLimits::new(100_000, 128);
@@ -13,8 +13,8 @@ const ALEKHNOVICH_GENEROUS: AlekhnovichLimits =
     AlekhnovichLimits::new(1_000_000, 100_000, 100_000_000, 400_000_000, 128)
         .with_roth_ruckenstein_crossover(0);
 
-fn gf8(value: u8) -> <Gf8 as Field>::Elem {
-    Gf8::read(&[value])
+fn gf8(value: u8) -> <Gf8B as Field>::Elem {
+    Gf8B::read(&[value])
 }
 
 fn gf16(value: u16) -> <Gf16 as Field>::Elem {
@@ -45,7 +45,7 @@ fn assert_exact_roots<F: FieldKernels>(
     max_degree: usize,
     expected: &[Polynomial<F>],
 ) {
-    let actual = roth_ruckenstein_roots(q, max_degree, GENEROUS).unwrap();
+    let actual = roth_ruckenstein_roots(q.y_coefficients(), max_degree, GENEROUS).unwrap();
     assert_eq!(actual.len(), expected.len());
     assert!(expected.iter().all(|root| actual.contains(root)));
     assert!(actual.iter().all(|root| q.has_root(root).unwrap()));
@@ -71,13 +71,13 @@ fn extracts_multiple_shared_and_short_roots() {
 
 #[test]
 fn repeated_factors_are_returned_once_and_order_is_canonical() {
-    let first = polynomial::<Gf8>(&[gf8(11), gf8(22), gf8(33)]);
-    let second = polynomial::<Gf8>(&[gf8(11), gf8(22), gf8(44)]);
+    let first = polynomial::<Gf8B>(&[gf8(11), gf8(22), gf8(33)]);
+    let second = polynomial::<Gf8B>(&[gf8(11), gf8(22), gf8(44)]);
     let forward = product_of_y_plus(&[first.clone(), first.clone(), second.clone()]);
     let reverse = product_of_y_plus(&[second.clone(), first.clone(), first.clone()]);
 
-    let forward_roots = roth_ruckenstein_roots(&forward, 2, GENEROUS).unwrap();
-    let reverse_roots = roth_ruckenstein_roots(&reverse, 2, GENEROUS).unwrap();
+    let forward_roots = roth_ruckenstein_roots(forward.y_coefficients(), 2, GENEROUS).unwrap();
+    let reverse_roots = roth_ruckenstein_roots(reverse.y_coefficients(), 2, GENEROUS).unwrap();
     assert_eq!(forward_roots, reverse_roots);
     assert_eq!(forward_roots.len(), 2);
     assert!(forward_roots.contains(&first));
@@ -87,16 +87,16 @@ fn repeated_factors_are_returned_once_and_order_is_canonical() {
 #[test]
 fn gf8_bounded_roots_match_brute_force() {
     let expected = [
-        polynomial::<Gf8>(&[gf8(7), gf8(19)]),
-        polynomial::<Gf8>(&[gf8(41), gf8(3)]),
-        polynomial::<Gf8>(&[gf8(200)]),
+        polynomial::<Gf8B>(&[gf8(7), gf8(19)]),
+        polynomial::<Gf8B>(&[gf8(41), gf8(3)]),
+        polynomial::<Gf8B>(&[gf8(200)]),
     ];
     let q = product_of_y_plus(&expected);
-    let actual = roth_ruckenstein_roots(&q, 1, GENEROUS).unwrap();
+    let actual = roth_ruckenstein_roots(q.y_coefficients(), 1, GENEROUS).unwrap();
     let mut exhaustive = Vec::new();
     for constant in u8::MIN..=u8::MAX {
         for linear in u8::MIN..=u8::MAX {
-            let candidate = polynomial::<Gf8>(&[gf8(constant), gf8(linear)]);
+            let candidate = polynomial::<Gf8B>(&[gf8(constant), gf8(linear)]);
             if q.has_root(&candidate).unwrap() {
                 exhaustive.push(candidate);
             }
@@ -120,7 +120,7 @@ fn generated_gf8_bivariates_match_exact_linear_root_enumeration() {
             if y_degree == 3 && coefficients.iter().all(|coefficient| coefficient.is_zero()) {
                 coefficients[0] = gf8(1);
             }
-            rows.push(polynomial::<Gf8>(&coefficients));
+            rows.push(polynomial::<Gf8B>(&coefficients));
         }
         let q = BivariatePolynomial::from_y_coefficients(rows);
         let identity_degree = q
@@ -130,10 +130,10 @@ fn generated_gf8_bivariates_match_exact_linear_root_enumeration() {
             .filter_map(|(y_degree, row)| row.degree().map(|x_degree| x_degree + y_degree))
             .max()
             .unwrap();
-        let actual = roth_ruckenstein_roots(&q, 1, GENEROUS).unwrap();
+        let actual = roth_ruckenstein_roots(q.y_coefficients(), 1, GENEROUS).unwrap();
         let mut scratch = AlekhnovichScratch::new();
         let divide_and_conquer =
-            alekhnovich_roots(&q, 1, ALEKHNOVICH_GENEROUS, &mut scratch).unwrap();
+            alekhnovich_roots(q.y_coefficients(), 1, ALEKHNOVICH_GENEROUS, &mut scratch).unwrap();
         let mut exhaustive = Vec::new();
         for constant in u8::MIN..=u8::MAX {
             for linear in u8::MIN..=u8::MAX {
@@ -144,7 +144,7 @@ fn generated_gf8_bivariates_match_exact_linear_root_enumeration() {
                     q.evaluate(x, constant.add(linear.mul(x))).is_zero()
                 });
                 if is_root {
-                    exhaustive.push(polynomial::<Gf8>(&[constant, linear]));
+                    exhaustive.push(polynomial::<Gf8B>(&[constant, linear]));
                 }
             }
         }
@@ -174,10 +174,11 @@ fn production_interpolation_root_is_extracted() {
     }
 
     let q = interpolate_koetter::<Gf16>(parameters, &points, &received).unwrap();
-    let roots = roth_ruckenstein_roots(&q, parameters.max_degree(), GENEROUS).unwrap();
+    let roots =
+        roth_ruckenstein_roots(q.y_coefficients(), parameters.max_degree(), GENEROUS).unwrap();
     let mut scratch = AlekhnovichScratch::new();
     let divide_and_conquer = alekhnovich_roots(
-        &q,
+        q.y_coefficients(),
         parameters.max_degree(),
         ALEKHNOVICH_GENEROUS,
         &mut scratch,
@@ -192,21 +193,29 @@ fn production_interpolation_root_is_extracted() {
 #[test]
 fn zero_constant_and_resource_boundaries_are_explicit() {
     assert_eq!(
-        roth_ruckenstein_roots(&BivariatePolynomial::<Gf8>::zero(), 2, GENEROUS,),
+        roth_ruckenstein_roots(
+            BivariatePolynomial::<Gf8B>::zero().y_coefficients(),
+            2,
+            GENEROUS
+        ),
         Err(RootError::ZeroBivariatePolynomial)
     );
     let y_independent =
-        BivariatePolynomial::from_y_coefficients(vec![polynomial::<Gf8>(&[gf8(1), gf8(1)])]);
+        BivariatePolynomial::from_y_coefficients(vec![polynomial::<Gf8B>(&[gf8(1), gf8(1)])]);
     assert!(
-        roth_ruckenstein_roots(&y_independent, 2, RothRuckensteinLimits::new(0, 0))
-            .unwrap()
-            .is_empty()
+        roth_ruckenstein_roots(
+            y_independent.y_coefficients(),
+            2,
+            RothRuckensteinLimits::new(0, 0)
+        )
+        .unwrap()
+        .is_empty()
     );
 
-    let root = polynomial::<Gf8>(&[gf8(7), gf8(9)]);
+    let root = polynomial::<Gf8B>(&[gf8(7), gf8(9)]);
     let q = product_of_y_plus(&[root]);
     assert_eq!(
-        roth_ruckenstein_roots(&q, 1, RothRuckensteinLimits::new(0, 1)),
+        roth_ruckenstein_roots(q.y_coefficients(), 1, RothRuckensteinLimits::new(0, 1)),
         Err(RootError::ResourceLimitExceeded {
             resource: "Roth–Ruckenstein work items",
             required: 1,
@@ -214,7 +223,7 @@ fn zero_constant_and_resource_boundaries_are_explicit() {
         })
     );
     assert_eq!(
-        roth_ruckenstein_roots(&q, 1, RothRuckensteinLimits::new(10, 0)),
+        roth_ruckenstein_roots(q.y_coefficients(), 1, RothRuckensteinLimits::new(10, 0)),
         Err(RootError::ResourceLimitExceeded {
             resource: "Roth–Ruckenstein output roots",
             required: 1,
@@ -225,13 +234,14 @@ fn zero_constant_and_resource_boundaries_are_explicit() {
 
 #[test]
 fn alekhnovich_matches_roth_on_shared_repeated_gf8_roots() {
-    let first = polynomial::<Gf8>(&[gf8(0), gf8(17), gf8(0), gf8(91)]);
-    let second = polynomial::<Gf8>(&[gf8(0), gf8(17), gf8(0), gf8(33)]);
-    let short = polynomial::<Gf8>(&[gf8(0)]);
+    let first = polynomial::<Gf8B>(&[gf8(0), gf8(17), gf8(0), gf8(91)]);
+    let second = polynomial::<Gf8B>(&[gf8(0), gf8(17), gf8(0), gf8(33)]);
+    let short = polynomial::<Gf8B>(&[gf8(0)]);
     let q = product_of_y_plus(&[first.clone(), second.clone(), first, short]);
-    let expected = roth_ruckenstein_roots(&q, 3, GENEROUS).unwrap();
+    let expected = roth_ruckenstein_roots(q.y_coefficients(), 3, GENEROUS).unwrap();
     let mut scratch = AlekhnovichScratch::new();
-    let actual = alekhnovich_roots(&q, 3, ALEKHNOVICH_GENEROUS, &mut scratch).unwrap();
+    let actual =
+        alekhnovich_roots(q.y_coefficients(), 3, ALEKHNOVICH_GENEROUS, &mut scratch).unwrap();
 
     assert_eq!(actual, expected);
     assert!(actual.iter().all(|root| q.has_root(root).unwrap()));
@@ -260,11 +270,22 @@ fn sampled_gf16_factors_match_roth_and_are_order_independent() {
         let forward = product_of_y_plus(&roots);
         roots.reverse();
         let reverse = product_of_y_plus(&roots);
-        let expected = roth_ruckenstein_roots(&forward, 5, GENEROUS).unwrap();
+        let expected = roth_ruckenstein_roots(forward.y_coefficients(), 5, GENEROUS).unwrap();
         let mut scratch = AlekhnovichScratch::new();
-        let actual = alekhnovich_roots(&forward, 5, ALEKHNOVICH_GENEROUS, &mut scratch).unwrap();
-        let reverse_actual =
-            alekhnovich_roots(&reverse, 5, ALEKHNOVICH_GENEROUS, &mut scratch).unwrap();
+        let actual = alekhnovich_roots(
+            forward.y_coefficients(),
+            5,
+            ALEKHNOVICH_GENEROUS,
+            &mut scratch,
+        )
+        .unwrap();
+        let reverse_actual = alekhnovich_roots(
+            reverse.y_coefficients(),
+            5,
+            ALEKHNOVICH_GENEROUS,
+            &mut scratch,
+        )
+        .unwrap();
 
         assert_eq!(actual, expected, "sampled GF16 case {case}");
         assert_eq!(reverse_actual, expected, "reversed GF16 case {case}");
@@ -274,7 +295,7 @@ fn sampled_gf16_factors_match_roth_and_are_order_independent() {
 
 #[test]
 fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
-    let root = polynomial::<Gf8>(&[gf8(1), gf8(2), gf8(3), gf8(4)]);
+    let root = polynomial::<Gf8B>(&[gf8(1), gf8(2), gf8(3), gf8(4)]);
     let q = product_of_y_plus(core::slice::from_ref(&root));
     let mut scratch = AlekhnovichScratch::new();
     let limits =
@@ -282,7 +303,7 @@ fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
 
     assert_eq!(
         alekhnovich_roots(
-            &q,
+            q.y_coefficients(),
             3,
             AlekhnovichLimits::new(100, 100, 7, 1_000, 10).with_roth_ruckenstein_crossover(0),
             &mut scratch,
@@ -295,7 +316,7 @@ fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
     );
     assert!(matches!(
         alekhnovich_roots(
-            &q,
+            q.y_coefficients(),
             3,
             AlekhnovichLimits::new(100, 100, 1_000, 7, 10)
                 .with_roth_ruckenstein_crossover(0),
@@ -309,7 +330,7 @@ fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
     ));
     assert_eq!(
         alekhnovich_roots(
-            &q,
+            q.y_coefficients(),
             3,
             AlekhnovichLimits::new(0, 100, 1_000, 1_000, 10).with_roth_ruckenstein_crossover(0),
             &mut scratch,
@@ -322,7 +343,7 @@ fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
     );
     assert!(matches!(
         alekhnovich_roots(
-            &q,
+            q.y_coefficients(),
             3,
             AlekhnovichLimits::new(100, 0, 1_000, 1_000, 10).with_roth_ruckenstein_crossover(0),
             &mut scratch,
@@ -334,7 +355,7 @@ fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
     ));
     assert_eq!(
         alekhnovich_roots(
-            &q,
+            q.y_coefficients(),
             3,
             AlekhnovichLimits::new(100, 100, 1_000, 1_000, 0).with_roth_ruckenstein_crossover(0),
             &mut scratch,
@@ -348,7 +369,7 @@ fn alekhnovich_resource_limits_and_small_crossover_are_explicit() {
 
     let crossover_limits = AlekhnovichLimits::new(100, 0, 1_000, 1_000, 10);
     assert_eq!(
-        alekhnovich_roots(&q, 3, crossover_limits, &mut scratch).unwrap(),
+        alekhnovich_roots(q.y_coefficients(), 3, crossover_limits, &mut scratch).unwrap(),
         vec![root]
     );
     assert!(limits.roth_ruckenstein_crossover() == 0);

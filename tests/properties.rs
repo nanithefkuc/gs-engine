@@ -1,7 +1,7 @@
 use fgf::field::{Elem, Field};
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16};
-use gs_engine::{BaseFieldRoots, Polynomial, base_field_roots};
+use fgf::{Gf8B, Gf16};
+use poly_ring::{BaseFieldRoots, Polynomial, base_field_roots};
 
 fn element<F: Field>(value: u64) -> F::Elem {
     let bytes = value.to_le_bytes();
@@ -44,7 +44,7 @@ fn assert_evaluation_homomorphisms<F: FieldKernels>() {
 
 #[test]
 fn generated_polynomial_arithmetic_preserves_evaluation_over_gf8_and_gf16() {
-    assert_evaluation_homomorphisms::<Gf8>();
+    assert_evaluation_homomorphisms::<Gf8B>();
     assert_evaluation_homomorphisms::<Gf16>();
 }
 
@@ -83,6 +83,6 @@ fn assert_generated_root_sets<F: FieldKernels>() {
 
 #[test]
 fn generated_split_factors_return_exact_distinct_roots() {
-    assert_generated_root_sets::<Gf8>();
+    assert_generated_root_sets::<Gf8B>();
     assert_generated_root_sets::<Gf16>();
 }

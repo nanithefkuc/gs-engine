@@ -234,7 +234,7 @@ pub fn select_scoring(key: ScoringCostKey) -> ScoringBackend {
 /// AFFT product crossover in full-product coefficients for a batch bucket.
 #[must_use]
 pub fn product_crossover(scalar: bool, batch: usize) -> usize {
-    use crate::poly::{
+    use poly_ring::{
         AFFT_BATCH4_CROSSOVER, AFFT_BATCH8_CROSSOVER, AFFT_BATCH16_CROSSOVER,
         AFFT_PRODUCT_CROSSOVER, SCALAR_AFFT_BATCH4_CROSSOVER, SCALAR_AFFT_BATCH8_CROSSOVER,
         SCALAR_AFFT_BATCH16_CROSSOVER, SCALAR_AFFT_PRODUCT_CROSSOVER,

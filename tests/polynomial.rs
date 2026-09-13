@@ -1,8 +1,8 @@
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::{Elem, Field};
 use fgf::kernel::backend_for;
-use fgf::{Gf8, Gf16};
-use gs_engine::{BivariatePolynomial, Polynomial, PolynomialError, WeightedTerm};
+use fgf::{Gf8B, Gf16};
+use poly_ring::{BivariatePolynomial, Polynomial, PolynomialError, WeightedTerm};
 
 fn powers<F: ButterflyKernels>(start: usize, count: usize) -> Vec<F::Elem> {
     (start..start + count)
@@ -89,7 +89,7 @@ fn assert_univariate_identities<F: ButterflyKernels>() {
 
 #[test]
 fn univariate_identities_hold_over_both_fields() {
-    assert_univariate_identities::<Gf8>();
+    assert_univariate_identities::<Gf8B>();
     assert_univariate_identities::<Gf16>();
 }
 
@@ -165,7 +165,7 @@ fn assert_axpy_boundaries<F: ButterflyKernels>() {
 
 #[test]
 fn scalar_and_packed_axpy_agree_at_lane_boundaries() {
-    assert_axpy_boundaries::<Gf8>();
+    assert_axpy_boundaries::<Gf8B>();
     assert_axpy_boundaries::<Gf16>();
 }
 

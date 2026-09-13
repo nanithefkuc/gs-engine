@@ -11,8 +11,8 @@
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16};
-use gs_engine::{
+use fgf::{Gf8B, Gf16};
+use poly_ring::{
     AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, Polynomial, RothRuckensteinLimits,
     alekhnovich_roots, roth_ruckenstein_roots,
 };
@@ -66,10 +66,17 @@ fn extract<F: ButterflyKernels>(
     q: &BivariatePolynomial<F>,
     max_degree: usize,
 ) -> (Vec<Polynomial<F>>, Vec<Polynomial<F>>) {
-    let rr = sorted(roth_ruckenstein_roots(q, max_degree, ROTH).unwrap());
+    let rr = sorted(roth_ruckenstein_roots(q.y_coefficients(), max_degree, ROTH).unwrap());
     let mut scratch = AlekhnovichScratch::new();
-    let alekhnovich =
-        sorted(alekhnovich_roots(q, max_degree, FORCE_ALEKHNOVICH, &mut scratch).unwrap());
+    let alekhnovich = sorted(
+        alekhnovich_roots(
+            q.y_coefficients(),
+            max_degree,
+            FORCE_ALEKHNOVICH,
+            &mut scratch,
+        )
+        .unwrap(),
+    );
     (rr, alekhnovich)
 }
 
@@ -131,8 +138,8 @@ fn mixed_bound<F: ButterflyKernels>(max_degree: usize) {
 
 #[test]
 fn gf8_list_rich_matches_roth_ruckenstein() {
-    list_rich::<Gf8>(5, 2, 3);
-    list_rich::<Gf8>(7, 1, 4);
+    list_rich::<Gf8B>(5, 2, 3);
+    list_rich::<Gf8B>(7, 1, 4);
 }
 
 #[test]
@@ -143,12 +150,12 @@ fn gf16_list_rich_matches_roth_ruckenstein() {
 
 #[test]
 fn no_bounded_root_yields_empty_lists() {
-    no_bounded_root::<Gf8>(3, 2);
+    no_bounded_root::<Gf8B>(3, 2);
     no_bounded_root::<Gf16>(4, 3);
 }
 
 #[test]
 fn over_degree_roots_are_filtered() {
-    mixed_bound::<Gf8>(3);
+    mixed_bound::<Gf8B>(3);
     mixed_bound::<Gf16>(4);
 }

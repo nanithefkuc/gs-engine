@@ -20,7 +20,8 @@ use fgf::field::Elem;
 use fgf::kernel::FieldKernels;
 
 use super::{InterpolationError, binomial_odd, validate_result};
-use crate::{BivariatePolynomial, ConfigError, GsParameters, Polynomial};
+use crate::{ConfigError, GsParameters};
+use poly_ring::{BivariatePolynomial, Polynomial};
 
 /// Reusable storage for fast KNH interpolation.
 #[derive(Debug)]
@@ -617,18 +618,15 @@ fn materialize_bivariate<F: FieldKernels>(
     basis_count: usize,
     basis: &[Polynomial<F>],
     output: &mut BivariatePolynomial<F>,
-) -> Result<(), ConfigError> {
-    output.prepare_y_rows(basis_count)?;
-    for k in 0..basis_count {
+) -> Result<(), InterpolationError> {
+    output.assign_y_coefficients_packed((0..basis_count).map(|k| {
         let entry = &basis[selected * basis_count + k];
-        let target = output.y_coefficient_mut(k);
         if entry.is_zero() {
-            target.set_zero();
+            &[][..]
         } else {
-            target.assign_packed(entry.as_packed())?;
+            entry.as_packed()
         }
-    }
-    output.normalize();
+    }))?;
     Ok(())
 }
 

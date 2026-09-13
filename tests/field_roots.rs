@@ -1,10 +1,10 @@
 use fgf::field::{Elem, Field};
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16};
-use gs_engine::{BaseFieldRoots, Polynomial, base_field_roots};
+use fgf::{Gf8B, Gf16};
+use poly_ring::{BaseFieldRoots, Polynomial, base_field_roots};
 
-fn gf8(value: u8) -> <Gf8 as Field>::Elem {
-    Gf8::read(&[value])
+fn gf8(value: u8) -> <Gf8B as Field>::Elem {
+    Gf8B::read(&[value])
 }
 
 fn gf16(value: u16) -> <Gf16 as Field>::Elem {
@@ -22,7 +22,7 @@ fn finite<F: FieldKernels>(polynomial: &Polynomial<F>) -> Vec<F::Elem> {
     }
 }
 
-fn exhaustive_gf8(polynomial: &Polynomial<Gf8>) -> Vec<<Gf8 as Field>::Elem> {
+fn exhaustive_gf8(polynomial: &Polynomial<Gf8B>) -> Vec<<Gf8B as Field>::Elem> {
     (u8::MIN..=u8::MAX)
         .map(gf8)
         .filter(|root| polynomial.evaluate(*root).is_zero())
@@ -39,21 +39,21 @@ fn exhaustive_gf16(polynomial: &Polynomial<Gf16>) -> Vec<<Gf16 as Field>::Elem> 
 #[test]
 fn zero_constant_linear_and_rootless_cases_are_explicit() {
     assert_eq!(
-        base_field_roots(&Polynomial::<Gf8>::zero()).unwrap(),
+        base_field_roots(&Polynomial::<Gf8B>::zero()).unwrap(),
         BaseFieldRoots::All
     );
     assert_eq!(
-        finite(&Polynomial::<Gf8>::constant(gf8(17)).unwrap()),
+        finite(&Polynomial::<Gf8B>::constant(gf8(17)).unwrap()),
         Vec::new()
     );
-    assert_eq!(finite(&linear::<Gf8>(gf8(0))), vec![gf8(0)]);
-    assert_eq!(finite(&linear::<Gf8>(gf8(91))), vec![gf8(91)]);
+    assert_eq!(finite(&linear::<Gf8B>(gf8(0))), vec![gf8(0)]);
+    assert_eq!(finite(&linear::<Gf8B>(gf8(91))), vec![gf8(91)]);
 
     let rootless = (u8::MIN..=u8::MAX)
         .map(gf8)
         .find_map(|constant| {
             let candidate =
-                Polynomial::<Gf8>::from_coefficients(&[constant, gf8(1), gf8(1)]).unwrap();
+                Polynomial::<Gf8B>::from_coefficients(&[constant, gf8(1), gf8(1)]).unwrap();
             exhaustive_gf8(&candidate).is_empty().then_some(candidate)
         })
         .expect("GF8 contains a trace-one quadratic constant");
@@ -66,23 +66,23 @@ fn all_linear_repeated_and_inseparable_factors_are_deduplicated() {
         .into_iter()
         .map(gf8)
         .collect();
-    let mut all_linear = Polynomial::<Gf8>::one().unwrap();
+    let mut all_linear = Polynomial::<Gf8B>::one().unwrap();
     for root in &expected {
-        all_linear = all_linear.multiply(&linear::<Gf8>(*root)).unwrap();
+        all_linear = all_linear.multiply(&linear::<Gf8B>(*root)).unwrap();
     }
     assert_eq!(finite(&all_linear), expected);
 
     let repeated_root = gf8(0xa7);
-    let repeated_linear = linear::<Gf8>(repeated_root);
+    let repeated_linear = linear::<Gf8B>(repeated_root);
     let squared = repeated_linear.multiply(&repeated_linear).unwrap();
     let fourth_power = squared.multiply(&squared).unwrap();
     assert!(fourth_power.formal_derivative().unwrap().is_zero());
     assert_eq!(finite(&fourth_power), vec![repeated_root]);
 
     let mixed = fourth_power
-        .multiply(&linear::<Gf8>(gf8(3)))
+        .multiply(&linear::<Gf8B>(gf8(3)))
         .unwrap()
-        .multiply(&linear::<Gf8>(gf8(240)))
+        .multiply(&linear::<Gf8B>(gf8(240)))
         .unwrap();
     assert_eq!(finite(&mixed), vec![gf8(3), repeated_root, gf8(240)]);
 }
@@ -100,7 +100,7 @@ fn generated_gf8_polynomials_match_exhaustive_enumeration() {
         if coefficients[degree].is_zero() {
             coefficients[degree] = gf8(1);
         }
-        let polynomial = Polynomial::<Gf8>::from_coefficients(&coefficients).unwrap();
+        let polynomial = Polynomial::<Gf8B>::from_coefficients(&coefficients).unwrap();
         let expected = exhaustive_gf8(&polynomial);
         let actual = finite(&polynomial);
         assert_eq!(actual, expected, "generated GF8 case {case}");

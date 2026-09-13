@@ -5,10 +5,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use fgf::Gf16;
 use fgf::field::Field;
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-    Polynomial,
-};
+use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 struct CountingAllocator;
 

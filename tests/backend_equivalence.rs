@@ -3,23 +3,22 @@
 use std::fmt::Write as _;
 use std::process::Command;
 
-use fgf::Gf8;
+use fgf::Gf8B;
 use fgf::field::Field;
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-};
+use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits};
+use poly_ring::AlekhnovichLimits;
 
 const CHILD_ENV: &str = "GS_ENGINE_BACKEND_EQUIVALENCE_CHILD";
 const RESULT_PREFIX: &str = "GS_ENGINE_BACKEND_RESULT=";
 const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(1_000_000, 100_000, usize::MAX, usize::MAX, 128);
 
-fn gf8(value: u8) -> <Gf8 as Field>::Elem {
-    Gf8::read(&[value])
+fn gf8(value: u8) -> <Gf8B as Field>::Elem {
+    Gf8B::read(&[value])
 }
 
 fn candidate_fingerprint() -> String {
-    let parameters = GsParameters::new::<Gf8>(
+    let parameters = GsParameters::new::<Gf8B>(
         4,
         0,
         2,
@@ -31,7 +30,7 @@ fn candidate_fingerprint() -> String {
     .unwrap();
     let plan = GsPlan::new(
         parameters,
-        EvaluationDomain::<Gf8>::additive_subspace(4).unwrap(),
+        EvaluationDomain::<Gf8B>::additive_subspace(4).unwrap(),
         ROOT_LIMITS,
     )
     .unwrap();

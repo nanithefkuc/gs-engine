@@ -13,11 +13,9 @@
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::{Elem, Field};
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16, Gf32};
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-    Polynomial,
-};
+use fgf::{Gf8B, Gf16, Gf32};
+use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);
@@ -106,7 +104,7 @@ fn differential<F: ButterflyKernels>(n: usize, k: usize, target_radius: usize, s
 
 #[test]
 fn gf8_high_rate_reencoding_matches_direct_path() {
-    differential::<Gf8>(8, 6, 1, 0x1234);
+    differential::<Gf8B>(8, 6, 1, 0x1234);
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::params::{interpolation_constraints, interpolation_monomials};
 use gs_engine::{ConfigError, GsParameters, ParameterLimits};
 
@@ -103,14 +103,14 @@ fn closed_form_counts_match_direct_enumeration() {
 #[test]
 fn explicit_validation_rejects_each_failed_inequality() {
     assert_eq!(
-        GsParameters::new::<Gf8>(15, 4, 6, 2, 4, 16, GENEROUS),
+        GsParameters::new::<Gf8B>(15, 4, 6, 2, 4, 16, GENEROUS),
         Err(ConfigError::InsufficientInterpolationSpace {
             monomials: 45,
             constraints: 45,
         })
     );
     assert_eq!(
-        GsParameters::new::<Gf8>(15, 4, 6, 2, 4, 18, GENEROUS),
+        GsParameters::new::<Gf8B>(15, 4, 6, 2, 4, 18, GENEROUS),
         Err(ConfigError::InsufficientAgreement {
             weighted_degree: 18,
             agreement_multiplicity: 18,
@@ -144,27 +144,27 @@ fn search_distinguishes_math_and_resource_failures() {
 #[test]
 fn invalid_and_overflowing_geometries_are_reported() {
     assert_eq!(
-        GsParameters::search::<Gf8>(0, 0, 0, GENEROUS),
+        GsParameters::search::<Gf8B>(0, 0, 0, GENEROUS),
         Err(ConfigError::ZeroParameter {
             parameter: "code length"
         })
     );
     assert_eq!(
-        GsParameters::search::<Gf8>(15, 15, 0, GENEROUS),
+        GsParameters::search::<Gf8B>(15, 15, 0, GENEROUS),
         Err(ConfigError::DegreeOutOfRange {
             max_degree: 15,
             code_length: 15,
         })
     );
     assert_eq!(
-        GsParameters::search::<Gf8>(15, 4, 15, GENEROUS),
+        GsParameters::search::<Gf8B>(15, 4, 15, GENEROUS),
         Err(ConfigError::RadiusOutOfRange {
             target_radius: 15,
             code_length: 15,
         })
     );
     assert_eq!(
-        GsParameters::search::<Gf8>(257, 4, 0, GENEROUS),
+        GsParameters::search::<Gf8B>(257, 4, 0, GENEROUS),
         Err(ConfigError::FieldCapacityExceeded {
             code_length: 257,
             field_order: 256,

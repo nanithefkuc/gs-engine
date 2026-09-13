@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use fgf::Gf8;
+use fgf::Gf8B;
 use fgf::field::Elem;
 use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan};
 
@@ -143,7 +143,7 @@ fn reencode_matrix(criterion: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
-    bench_field::<Gf8>(&mut group, "gf8");
+    bench_field::<Gf8B>(&mut group, "gf8");
     group.finish();
 }
 

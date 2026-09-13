@@ -9,10 +9,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::{Elem, Field};
 use fgf::kernel::backend_for;
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-    Polynomial,
-};
+use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 pub const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);

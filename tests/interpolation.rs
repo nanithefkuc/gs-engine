@@ -1,17 +1,15 @@
 #[cfg(feature = "internals")]
-use fgf::Gf8;
+use fgf::Gf8B;
 use fgf::Gf16;
 use fgf::field::{Elem, Field};
-use gs_engine::{
-    BivariatePolynomial, GsParameters, ParameterLimits, Polynomial, interpolate_koetter,
-    interpolate_module,
-};
+use gs_engine::{GsParameters, ParameterLimits, interpolate_koetter, interpolate_module};
 #[cfg(feature = "internals")]
 use gs_engine::{
     InterpolationConstraint, InterpolationError, InterpolationMonomial,
     ReferenceInterpolationLimits, interpolate_reference, reference_constraints,
     reference_monomials,
 };
+use poly_ring::{BivariatePolynomial, Polynomial};
 
 const PARAMETER_LIMITS: ParameterLimits = ParameterLimits::new(8, 16, usize::MAX, usize::MAX);
 
@@ -20,8 +18,8 @@ fn gf16(value: u16) -> <Gf16 as Field>::Elem {
 }
 
 #[cfg(feature = "internals")]
-fn gf8(value: u8) -> <Gf8 as Field>::Elem {
-    Gf8::read(&[value])
+fn gf8(value: u8) -> <Gf8B as Field>::Elem {
+    Gf8B::read(&[value])
 }
 
 fn assert_hasse_constraints<F: fgf::kernel::FieldKernels>(
@@ -156,14 +154,14 @@ fn reference_interpolation_recovers_the_guaranteed_root() {
 #[cfg(feature = "internals")]
 #[test]
 fn reference_interpolation_works_over_gf8() {
-    let parameters = GsParameters::new::<Gf8>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
     let points: Vec<_> = (1..=7).map(gf8).collect();
     let values: Vec<_> = points
         .iter()
         .copied()
         .map(|point| point.square().add(gf8(3)))
         .collect();
-    let interpolation = interpolate_reference::<Gf8>(
+    let interpolation = interpolate_reference::<Gf8B>(
         parameters,
         &points,
         &values,
@@ -250,24 +248,24 @@ fn high_multiplicity_koetter_jets_match_module_constraints() {
 #[cfg(feature = "internals")]
 #[test]
 fn reference_and_koetter_yield_the_same_filtered_candidates() {
-    let parameters = GsParameters::new::<Gf8>(5, 0, 2, 1, 1, 2, PARAMETER_LIMITS).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(5, 0, 2, 1, 1, 2, PARAMETER_LIMITS).unwrap();
     let points: Vec<_> = (1..=5).map(gf8).collect();
     let received = vec![gf8(7), gf8(7), gf8(7), gf8(9), gf8(9)];
-    let reference = interpolate_reference::<Gf8>(
+    let reference = interpolate_reference::<Gf8B>(
         parameters,
         &points,
         &received,
         ReferenceInterpolationLimits::new(100, 100),
     )
     .unwrap();
-    let production = interpolate_koetter::<Gf8>(parameters, &points, &received).unwrap();
-    let optimized = interpolate_module::<Gf8>(parameters, &points, &received).unwrap();
+    let production = interpolate_koetter::<Gf8B>(parameters, &points, &received).unwrap();
+    let optimized = interpolate_module::<Gf8B>(parameters, &points, &received).unwrap();
 
-    let filtered_candidates = |interpolation: &gs_engine::BivariatePolynomial<Gf8>| {
+    let filtered_candidates = |interpolation: &poly_ring::BivariatePolynomial<Gf8B>| {
         (u8::MIN..=u8::MAX)
             .filter_map(|raw| {
                 let value = gf8(raw);
-                let candidate = Polynomial::<Gf8>::from_coefficients(&[value]).unwrap();
+                let candidate = Polynomial::<Gf8B>::from_coefficients(&[value]).unwrap();
                 let distance = points
                     .iter()
                     .zip(&received)

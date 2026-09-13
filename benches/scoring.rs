@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::{DecodeScratch, ScoringStrategy, score_candidates_with_strategy};
 
 use common::{
@@ -79,7 +79,7 @@ fn run_field<F: ButterflyKernels>(
         let received = candidates[0].evaluate_many(domain.points()).unwrap();
         let total_coefficients: usize = candidates
             .iter()
-            .map(gs_engine::Polynomial::coefficient_count)
+            .map(poly_ring::Polynomial::coefficient_count)
             .sum();
         let geometry = format!(
             "{field}/{}/{}/points{}/candidates{}/degree{}/coefficients{}",
@@ -159,7 +159,7 @@ fn scoring(criterion: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
-    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf8B>(&mut group, "gf8");
     run_field::<Gf16>(&mut group, "gf16");
     group.finish();
 }

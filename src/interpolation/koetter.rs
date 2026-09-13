@@ -19,7 +19,8 @@ use fgf::field::Elem;
 use fgf::kernel::{FieldKernels, backend_for};
 use fgf::ops::{self, Coeff};
 
-use crate::{BivariatePolynomial, ConfigError, GsParameters};
+use crate::{ConfigError, GsParameters};
+use poly_ring::BivariatePolynomial;
 
 use super::{InterpolationError, binomial_odd, fill_powers, validate_inputs, validate_result};
 
@@ -437,15 +438,13 @@ impl<F: FieldKernels> DenseBasisPolynomial<F> {
         &self,
         output: &mut BivariatePolynomial<F>,
     ) -> Result<(), InterpolationError> {
-        output.prepare_y_rows(self.y_rows)?;
-        for y_degree in 0..self.y_rows {
-            let active = self.active[y_degree];
-            output
-                .y_coefficient_mut(y_degree)
-                .assign_packed(self.row_prefix(y_degree, active))?;
-        }
-        output.normalize();
-        Ok(())
+        // Bulk ingress: validated, capacity-reusing, and normalized on
+        // return. The mapped range is cloneable and exact-size.
+        output
+            .assign_y_coefficients_packed(
+                (0..self.y_rows).map(|y_degree| self.row_prefix(y_degree, self.active[y_degree])),
+            )
+            .map_err(InterpolationError::from)
     }
 
     fn refresh_leading(&mut self) {

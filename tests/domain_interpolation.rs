@@ -9,11 +9,12 @@
 use fgf::field::Elem;
 use fgf::field::Field;
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::{
-    AlekhnovichLimits, BivariatePolynomial, DecodeScratch, EvaluationDomain, GsParameters, GsPlan,
-    InterpolationPlan, ModuleScratch, ParameterLimits, Polynomial, interpolate_module_into,
+    DecodeScratch, EvaluationDomain, GsParameters, GsPlan, InterpolationPlan, ModuleScratch,
+    ParameterLimits, interpolate_module_into,
 };
+use poly_ring::{AlekhnovichLimits, BivariatePolynomial, Polynomial};
 
 const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);
@@ -99,7 +100,7 @@ fn transform_received_interpolant_satisfies_constraints_on_additive_domain() {
         assert!(!output.is_zero());
     }
     let mut rng = Rng(0x9e37_79b9);
-    check::<Gf8>(16, &mut rng);
+    check::<Gf8B>(16, &mut rng);
     check::<Gf16>(16, &mut rng);
 }
 
@@ -162,7 +163,7 @@ fn transform_module_matches_newton_module_on_additive_domain() {
     }
     let mut rng = Rng(0x1234_5678_9abc_def0);
     for &size in &[8usize, 16, 32] {
-        check::<Gf8>(size, &mut rng);
+        check::<Gf8B>(size, &mut rng);
         check::<Gf16>(size, &mut rng);
     }
 }
@@ -213,7 +214,7 @@ fn additive_decode_matches_arbitrary_decode() {
     }
     let mut rng = Rng(0xfeed_face_dead_beef);
     for &size in &[8usize, 16, 32, 64] {
-        check::<Gf8>(size, &mut rng);
+        check::<Gf8B>(size, &mut rng);
         check::<Gf16>(size, &mut rng);
     }
 }
@@ -267,7 +268,7 @@ fn affine_decode_matches_arbitrary_decode() {
     }
     let mut rng = Rng(0xc0de_dead);
     for &size in &[8usize, 16, 32] {
-        check::<Gf8>(size, &mut rng);
+        check::<Gf8B>(size, &mut rng);
         check::<Gf16>(size, &mut rng);
     }
 }

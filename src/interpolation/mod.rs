@@ -26,10 +26,11 @@ use fgf::field::Elem;
 use fgf::kernel::FieldKernels;
 
 #[cfg(feature = "internals")]
-use crate::Polynomial;
-#[cfg(feature = "internals")]
 use crate::geometry::try_zeroed;
-use crate::{BivariatePolynomial, ConfigError, GsParameters};
+use crate::{ConfigError, GsParameters};
+use poly_ring::BivariatePolynomial;
+#[cfg(feature = "internals")]
+use poly_ring::Polynomial;
 
 #[cfg(feature = "internals")]
 /// One monomial in the weighted interpolation basis.
@@ -126,6 +127,8 @@ impl ReferenceInterpolationLimits {
 pub enum InterpolationError {
     /// Checked geometry or allocation failed.
     Config(ConfigError),
+    /// Ring polynomial arithmetic failed.
+    Polynomial(poly_ring::PolynomialError),
     /// The shared weak-Popov reducer rejected the row geometry or termination
     /// measure.
     Reduction(gfm::ReduceError),
@@ -180,6 +183,7 @@ impl fmt::Display for InterpolationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::Config(error) => error.fmt(formatter),
+            Self::Polynomial(error) => error.fmt(formatter),
             Self::LengthMismatch {
                 expected,
                 points,
@@ -244,18 +248,15 @@ impl From<butterfly_fft::error::TransformLengthError> for InterpolationError {
         Self::Transform(error)
     }
 }
-impl From<crate::poly::PolynomialError> for InterpolationError {
-    fn from(error: crate::poly::PolynomialError) -> Self {
-        use crate::poly::PolynomialError;
-        match error {
-            PolynomialError::DivisionByZero => Self::InvalidResult {
-                reason: "polynomial division by zero in fast KNH",
-            },
-            PolynomialError::NonExactDivision => Self::InvalidResult {
-                reason: "non-exact polynomial division in fast KNH",
-            },
-            PolynomialError::Config(config) => Self::Config(config),
-        }
+impl From<poly_ring::PolynomialError> for InterpolationError {
+    fn from(error: poly_ring::PolynomialError) -> Self {
+        Self::Polynomial(error)
+    }
+}
+
+impl From<poly_ring::ConfigError> for InterpolationError {
+    fn from(error: poly_ring::ConfigError) -> Self {
+        Self::Polynomial(poly_ring::PolynomialError::Config(error))
     }
 }
 

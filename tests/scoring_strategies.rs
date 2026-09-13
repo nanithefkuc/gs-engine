@@ -2,10 +2,9 @@
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Field;
-use fgf::{Gf8, Gf16};
-use gs_engine::{
-    DecodeScratch, EvaluationDomain, Polynomial, ScoringStrategy, score_candidates_with_strategy,
-};
+use fgf::{Gf8B, Gf16};
+use gs_engine::{DecodeScratch, EvaluationDomain, ScoringStrategy, score_candidates_with_strategy};
+use poly_ring::Polynomial;
 
 fn element<F: Field>(value: u64) -> F::Elem {
     F::read(&value.to_le_bytes()[..F::BYTES])
@@ -67,7 +66,7 @@ fn forced_scoring_matches<F: ButterflyKernels>() {
 
 #[test]
 fn forced_scoring_strategies_match_in_gf8() {
-    forced_scoring_matches::<Gf8>();
+    forced_scoring_matches::<Gf8B>();
 }
 
 #[test]

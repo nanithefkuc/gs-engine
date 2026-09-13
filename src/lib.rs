@@ -7,6 +7,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+#![allow(
+    // `as_chunks::<F::BYTES>()` needs a const generic depending on a
+    // generic parameter, which stable Rust rejects; the iterator form is
+    // the only spelling that compiles for every field width.
+    clippy::chunks_exact_to_as_chunks
+)]
 
 extern crate alloc;
 
@@ -19,8 +25,6 @@ pub mod geometry;
 pub mod interpolation;
 mod parallel;
 pub mod params;
-pub mod poly;
-pub mod roots;
 mod scratch;
 
 pub use cost::{
@@ -52,18 +56,6 @@ pub use interpolation::{
     interpolate_module, interpolate_module_into,
 };
 pub use params::{GsParameters, ParameterLimits, ResourceEstimate};
-pub use poly::{
-    AFFT_BATCH4_CROSSOVER, AFFT_BATCH8_CROSSOVER, AFFT_BATCH16_CROSSOVER, AFFT_PRODUCT_CROSSOVER,
-    BivariatePolynomial, Polynomial, PolynomialError, PolynomialProductScratch, ProductError,
-    ProductStrategy, SCALAR_AFFT_BATCH4_CROSSOVER, SCALAR_AFFT_BATCH8_CROSSOVER,
-    SCALAR_AFFT_BATCH16_CROSSOVER, SCALAR_AFFT_PRODUCT_CROSSOVER, WeightedTerm,
-    multiply_batch_truncated,
-};
-pub use roots::{
-    AffineRootFamily, AlekhnovichLimits, AlekhnovichScratch, BaseFieldRoots,
-    DEFAULT_ROTH_RUCKENSTEIN_CROSSOVER, RootError, RothRuckensteinLimits, alekhnovich_roots,
-    base_field_roots, roth_ruckenstein_roots,
-};
 pub use scratch::DecodeScratch;
 
 #[doc(hidden)]

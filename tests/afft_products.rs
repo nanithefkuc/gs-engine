@@ -1,7 +1,7 @@
 use fgf::field::Field;
 use fgf::kernel::FieldKernels;
-use fgf::{Gf8, Gf16};
-use gs_engine::{Polynomial, PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
+use fgf::{Gf8B, Gf16};
+use poly_ring::{Polynomial, PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
 fn generated<F: FieldKernels>(count: usize, mut state: u64) -> Polynomial<F> {
     let coefficients: Vec<_> = (0..count)
@@ -48,8 +48,8 @@ fn compare_forced<F: butterfly_fft::core::kernel::ButterflyKernels>(
 
 #[test]
 fn forced_afft_matches_schoolbook_over_gf8_and_gf16() {
-    let left8 = generated::<Gf8>(100, 1);
-    let right8 = generated::<Gf8>(89, 2);
+    let left8 = generated::<Gf8B>(100, 1);
+    let right8 = generated::<Gf8B>(89, 2);
     compare_forced(&left8, &right8, 188);
     compare_forced(&left8, &right8, 117);
 
@@ -61,8 +61,8 @@ fn forced_afft_matches_schoolbook_over_gf8_and_gf16() {
 
 #[test]
 fn forced_products_cover_zero_unbalanced_truncation_and_cancellation() {
-    let zero = Polynomial::<Gf8>::zero();
-    let one = Polynomial::<Gf8>::one().unwrap();
+    let zero = Polynomial::<Gf8B>::zero();
+    let one = Polynomial::<Gf8B>::one().unwrap();
     compare_forced(&zero, &one, 1);
 
     let unbalanced_left = generated::<Gf16>(127, 11);
@@ -101,8 +101,8 @@ fn batched_rows_match_independent_products() {
 
 #[test]
 fn zero_truncated_and_auto_products_are_canonical() {
-    let zero = Polynomial::<Gf8>::zero();
-    let value = generated::<Gf8>(31, 9);
+    let zero = Polynomial::<Gf8B>::zero();
+    let value = generated::<Gf8B>(31, 9);
     let mut scratch = PolynomialProductScratch::new();
     let mut output = Vec::new();
     multiply_batch_truncated(

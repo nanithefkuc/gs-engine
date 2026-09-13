@@ -499,19 +499,16 @@ fn interpolation_monomials_u128(
     y_degree: u128,
     max_degree: u128,
 ) -> Result<u128, ConfigError> {
-    let active_rows = if max_degree == 0 {
-        y_degree
+    // `weighted_degree / max_degree` bounds the rows a bounded degree can
+    // occupy; a zero bound imposes no division constraint, so the checked
+    // division's `None` maps to the `u128` maximum.
+    let per_row_bound = weighted_degree.checked_div(max_degree).unwrap_or(u128::MAX);
+    let active_rows =
+        min(y_degree, per_row_bound)
             .checked_add(1)
             .ok_or(ConfigError::GeometryOverflow {
                 context: "active interpolation rows",
-            })?
-    } else {
-        min(y_degree, weighted_degree / max_degree)
-            .checked_add(1)
-            .ok_or(ConfigError::GeometryOverflow {
-                context: "active interpolation rows",
-            })?
-    };
+            })?;
     let rectangle =
         active_rows
             .checked_mul(weighted_degree + 1)

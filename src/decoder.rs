@@ -9,12 +9,12 @@ use butterfly_fft::error::TransformLengthError;
 
 use crate::evaluate::score_candidates;
 use crate::interpolation::{ReencodePlan, interpolate_reencoded_into};
-use crate::roots::alekhnovich_roots_into;
 use crate::{
-    AlekhnovichLimits, ConfigError, DecodeScratch, DomainError, EvaluationDomain, GsParameters,
-    InterpolationError, InterpolationPlan, Polynomial, RootError, interpolate_koetter_into,
-    interpolate_module_into,
+    ConfigError, DecodeScratch, DomainError, EvaluationDomain, GsParameters, InterpolationError,
+    InterpolationPlan, interpolate_koetter_into, interpolate_module_into,
 };
+use poly_ring::alekhnovich_roots_into;
+use poly_ring::{AlekhnovichLimits, Polynomial, RootError};
 
 /// Failure while constructing or executing an end-to-end GS decoder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,8 +32,10 @@ pub enum DecodeError {
     },
     /// Multiplicity interpolation failed.
     Interpolation(InterpolationError),
+    /// Ring polynomial arithmetic failed.
+    Polynomial(poly_ring::PolynomialError),
     /// Polynomial root extraction failed.
-    Roots(RootError),
+    Roots(poly_ring::RootError),
     /// A butterfly-fft execution buffer had inconsistent geometry.
     Transform(TransformLengthError),
     /// A decoder-internal postcondition was violated.
@@ -55,6 +57,18 @@ pub enum DecodeError {
 impl From<ConfigError> for DecodeError {
     fn from(error: ConfigError) -> Self {
         Self::Config(error)
+    }
+}
+
+impl From<poly_ring::PolynomialError> for DecodeError {
+    fn from(error: poly_ring::PolynomialError) -> Self {
+        Self::Polynomial(error)
+    }
+}
+
+impl From<poly_ring::ConfigError> for DecodeError {
+    fn from(error: poly_ring::ConfigError) -> Self {
+        Self::Polynomial(poly_ring::PolynomialError::Config(error))
     }
 }
 
@@ -92,6 +106,7 @@ impl fmt::Display for DecodeError {
                 "received word has length {got}, but decoder plan requires {expected}"
             ),
             Self::Interpolation(error) => error.fmt(formatter),
+            Self::Polynomial(error) => error.fmt(formatter),
             Self::Roots(error) => error.fmt(formatter),
             Self::Transform(error) => error.fmt(formatter),
             Self::InternalInvariant { reason } => {
@@ -348,7 +363,7 @@ impl<F: ButterflyKernels> GsPlan<F> {
             return Err(error);
         }
         if let Err(error) = alekhnovich_roots_into(
-            &scratch.interpolation_output,
+            scratch.interpolation_output.y_coefficients(),
             self.parameters.max_degree(),
             self.root_limits,
             &mut scratch.roots,

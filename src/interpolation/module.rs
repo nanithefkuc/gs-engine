@@ -5,7 +5,8 @@ use fgf::kernel::FieldKernels;
 use fgf::ops;
 use gfm::{PopovLeadingTerm, WeakPopovBasis, WeakPopovScratch, weak_popov_basis_with_scratch};
 
-use crate::{BivariatePolynomial, ConfigError, GsParameters, Polynomial};
+use crate::{ConfigError, GsParameters};
+use poly_ring::{BivariatePolynomial, Polynomial};
 
 use super::{
     InterpolationError, InterpolationPlan, ReencodePlan, binomial_odd, validate_inputs,
@@ -213,20 +214,22 @@ impl<F: FieldKernels> ModuleSlab<F> {
         &self,
         row: usize,
         output: &mut BivariatePolynomial<F>,
-    ) -> Result<(), ConfigError> {
-        output.prepare_y_rows(self.columns)?;
-        for column in 0..self.columns {
-            let target = output.y_coefficient_mut(column);
-            let Some(degree) = self.degrees[self.column_index(row, column)] else {
-                target.set_zero();
-                continue;
-            };
-            let byte_count = (degree + 1) * F::BYTES;
-            let start = self.column_byte_offset(row, column);
-            target.assign_packed(&self.coefficients[start..start + byte_count])?;
-        }
-        output.normalize();
-        Ok(())
+    ) -> Result<(), InterpolationError> {
+        // Bulk ingress: validated, capacity-reusing, and normalized on
+        // return. The mapped range is cloneable and exact-size; columns
+        // without a recorded degree contribute empty rows.
+        output
+            .assign_y_coefficients_packed((0..self.columns).map(|column| {
+                match self.degrees[self.column_index(row, column)] {
+                    Some(degree) => {
+                        let byte_count = (degree + 1) * F::BYTES;
+                        let start = self.column_byte_offset(row, column);
+                        &self.coefficients[start..start + byte_count]
+                    }
+                    None => &[],
+                }
+            }))
+            .map_err(InterpolationError::from)
     }
 }
 
@@ -487,7 +490,7 @@ fn fill_polynomial_powers<F: FieldKernels>(
     polynomial: &Polynomial<F>,
     maximum: usize,
     powers: &mut Vec<Polynomial<F>>,
-) -> Result<(), ConfigError> {
+) -> Result<(), InterpolationError> {
     let count = maximum
         .checked_add(1)
         .ok_or(ConfigError::GeometryOverflow {
@@ -520,7 +523,7 @@ fn module_row_into<F: FieldKernels>(
     vanishing_powers: &[Polynomial<F>],
     product: &mut Polynomial<F>,
     basis: &mut ModuleSlab<F>,
-) -> Result<(), ConfigError> {
+) -> Result<(), InterpolationError> {
     if row < multiplicity {
         let vanishing = &vanishing_powers[multiplicity - row];
         for y in 0..=row {
@@ -700,6 +703,23 @@ pub struct ReencodeScratch<F: FieldKernels> {
     reduction: WeakPopovScratch,
     /// Materialized reduced interpolation polynomial `A(X,Y)`.
     reduced_output: BivariatePolynomial<F>,
+    /// Re-encoding reconstruction staging: the flattened packed row bytes,
+    /// their per-row lengths, and the row product work polynomial. All three
+    /// retain capacity across calls so a warmed reconstruction allocates
+    /// nothing.
+    reencode_staging: ReencodeStaging<F>,
+}
+
+/// Capacity-retaining staging for re-encoding reconstruction.
+struct ReencodeStaging<F: FieldKernels> {
+    /// Flattened packed row bytes, row-major.
+    flat: Vec<u8>,
+    /// Packed byte length of each row, parallel to the rows.
+    lengths: Vec<usize>,
+    /// Row-start offsets into `flat` (`row_count + 1` entries).
+    offsets: Vec<usize>,
+    /// Row product work polynomial.
+    row: Polynomial<F>,
 }
 
 impl<F: FieldKernels> ReencodeScratch<F> {
@@ -714,6 +734,12 @@ impl<F: FieldKernels> ReencodeScratch<F> {
             reduced_powers: Vec::new(),
             product: Polynomial::zero(),
             remainder: Polynomial::zero(),
+            reencode_staging: ReencodeStaging {
+                flat: Vec::new(),
+                lengths: Vec::new(),
+                offsets: Vec::new(),
+                row: Polynomial::zero(),
+            },
             basis: ModuleSlab::new(),
             reduction: WeakPopovScratch::new(),
             reduced_output: BivariatePolynomial::zero(),
@@ -860,6 +886,7 @@ pub(crate) fn interpolate_reencoded_into<F: FieldKernels>(
         plan,
         &scratch.reduced_output,
         &mut scratch.remainder,
+        &mut scratch.reencode_staging,
         output,
     )?;
 
@@ -882,7 +909,7 @@ fn reduced_module_row_into<F: FieldKernels>(
     grem_powers: &[Polynomial<F>],
     product: &mut Polynomial<F>,
     basis: &mut ModuleSlab<F>,
-) -> Result<(), ConfigError> {
+) -> Result<(), InterpolationError> {
     if row < multiplicity {
         let grem = &grem_powers[multiplicity - row];
         for y in 0..=row {
@@ -914,6 +941,7 @@ fn reconstruct_reencoded<F: FieldKernels>(
     plan: &ReencodePlan<F>,
     reduced: &BivariatePolynomial<F>,
     remainder: &mut Polynomial<F>,
+    staging: &mut ReencodeStaging<F>,
     output: &mut BivariatePolynomial<F>,
 ) -> Result<(), InterpolationError> {
     let multiplicity = parameters.multiplicity();
@@ -923,28 +951,52 @@ fn reconstruct_reencoded<F: FieldKernels>(
         .ok_or(ConfigError::GeometryOverflow {
             context: "re-encoding reconstruction row count",
         })?;
-    output.prepare_y_rows(row_count)?;
+
+    // Compute every output row's packed bytes up front, then hand the whole
+    // geometry to the ring's checked bulk ingress: `Q_b = Psi^{s-b} A_b`
+    // for `b <= s` and `Q_b = A_b / Psi^{b-s}` for `b > s`, the latter
+    // exact because the re-encoded coordinates force the prefactor into
+    // every reduced row.
+    let ReencodeStaging {
+        flat,
+        lengths,
+        offsets,
+        row,
+    } = &mut *staging;
+    flat.clear();
+    lengths.clear();
+    offsets.clear();
     for column in 0..row_count {
-        let target = output.y_coefficient_mut(column);
-        target.set_zero();
+        row.set_zero();
         let Some(reduced_row) = reduced.y_coefficient(column) else {
+            lengths.push(0);
             continue;
         };
         if reduced_row.is_zero() {
+            lengths.push(0);
             continue;
         }
         if column <= multiplicity {
-            plan.psi_powers[multiplicity - column].multiply_into(reduced_row, target)?;
+            plan.psi_powers[multiplicity - column].multiply_into(reduced_row, row)?;
         } else {
-            reduced_row.div_rem_into(&plan.psi_powers[column - multiplicity], target, remainder)?;
+            reduced_row.div_rem_into(&plan.psi_powers[column - multiplicity], row, remainder)?;
             if !remainder.is_zero() {
                 return Err(InterpolationError::InvalidResult {
                     reason: "re-encoding factor division left a nonzero remainder",
                 });
             }
         }
+        lengths.push(row.as_packed().len());
+        flat.extend_from_slice(row.as_packed());
     }
-    output.normalize();
+
+    offsets.push(0);
+    for &length in lengths.iter() {
+        offsets.push(offsets.last().unwrap() + length);
+    }
+    output.assign_y_coefficients_packed(
+        (0..row_count).map(|index| &flat[offsets[index]..offsets[index + 1]]),
+    )?;
     Ok(())
 }
 

@@ -4,7 +4,8 @@ use butterfly_fft::basis::{conversion_scratch_elements, monomial_to_novel_bytes}
 use butterfly_fft::core::kernel::ButterflyKernels;
 
 use crate::decoder::DecodeError;
-use crate::{ConfigError, DecodeScratch, EvaluationDomain, Polynomial};
+use crate::{ConfigError, DecodeScratch, EvaluationDomain};
+use poly_ring::Polynomial;
 
 /// Butterfly-FFT scoring crossover in points, one candidate. See `BENCHMARKS.md`.
 pub const BUTTERFLY_FFT_SINGLE_SCORING_CROSSOVER: usize = 256;
@@ -67,14 +68,7 @@ pub fn score_candidates_with_strategy<F: ButterflyKernels>(
     output: &mut Vec<Polynomial<F>>,
 ) -> Result<(), DecodeError> {
     score_dispatch(
-        domain,
-        received,
-        candidates,
-        radius,
-        strategy,
-        scratch,
-        output,
-        &mut None,
+        domain, received, candidates, radius, strategy, scratch, output, &mut None,
     )
 }
 
@@ -127,7 +121,9 @@ fn score_dispatch<F: ButterflyKernels>(
         ScoringStrategy::ButterflyFft => true,
     };
     if use_fft {
-        score_butterfly_fft(domain, received, candidates, radius, scratch, output, distances)
+        score_butterfly_fft(
+            domain, received, candidates, radius, scratch, output, distances,
+        )
     } else {
         score_horner(
             domain.points(),
@@ -380,7 +376,8 @@ mod tests {
     use fgf::field::Field;
 
     use super::score_candidates;
-    use crate::{DecodeScratch, EvaluationDomain, Polynomial};
+    use crate::{DecodeScratch, EvaluationDomain};
+    use poly_ring::Polynomial;
 
     fn gf16(value: u16) -> <Gf16 as Field>::Elem {
         Gf16::read(&value.to_le_bytes())

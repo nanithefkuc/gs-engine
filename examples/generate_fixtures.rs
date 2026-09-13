@@ -15,11 +15,9 @@ use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::{Elem, Field};
 use fgf::kernel::FieldKernels;
 
-use fgf::{Gf8, Gf16};
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-    Polynomial,
-};
+use fgf::{Gf8B, Gf16};
+use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);
@@ -131,15 +129,15 @@ fn corrupt<F: FieldKernels>(
 }
 
 fn gf8_additive(dir: &Path) {
-    let parameters = GsParameters::new::<Gf8>(4, 0, 2, 1, 2, 1, PARAMETER_LIMITS).unwrap();
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(4).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(4, 0, 2, 1, 2, 1, PARAMETER_LIMITS).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(4).unwrap();
     let received = [
-        element::<Gf8>(7),
-        element::<Gf8>(7),
-        element::<Gf8>(9),
-        element::<Gf8>(9),
+        element::<Gf8B>(7),
+        element::<Gf8B>(7),
+        element::<Gf8B>(9),
+        element::<Gf8B>(9),
     ];
-    emit::<Gf8>(
+    emit::<Gf8B>(
         dir,
         Case {
             name: "gf8-additive-4-1-radius-2",
@@ -155,17 +153,17 @@ fn gf8_additive(dir: &Path) {
 }
 
 fn gf8_arbitrary(dir: &Path) {
-    let parameters = GsParameters::search::<Gf8>(7, 2, 1, PARAMETER_LIMITS).unwrap();
-    let points: Vec<_> = (0..7).map(element::<Gf8>).collect();
-    let message = Polynomial::<Gf8>::from_coefficients(&[
-        element::<Gf8>(0x1f),
-        element::<Gf8>(0x2a),
-        element::<Gf8>(0x33),
+    let parameters = GsParameters::search::<Gf8B>(7, 2, 1, PARAMETER_LIMITS).unwrap();
+    let points: Vec<_> = (0..7).map(element::<Gf8B>).collect();
+    let message = Polynomial::<Gf8B>::from_coefficients(&[
+        element::<Gf8B>(0x1f),
+        element::<Gf8B>(0x2a),
+        element::<Gf8B>(0x33),
     ])
     .unwrap();
-    let received = corrupt::<Gf8>(&message, &points, &[(4, 0x11)]);
+    let received = corrupt::<Gf8B>(&message, &points, &[(4, 0x11)]);
     let domain = EvaluationDomain::arbitrary(points).unwrap();
-    emit::<Gf8>(
+    emit::<Gf8B>(
         dir,
         Case {
             name: "gf8-arbitrary-7-3-radius-1",

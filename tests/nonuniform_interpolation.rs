@@ -14,19 +14,20 @@
 
 #![cfg(feature = "internals")]
 
-use fgf::Gf8;
+use fgf::Gf8B;
 use fgf::Gf16;
 use fgf::field::{Elem, Field};
 use gs_engine::{
-    BivariatePolynomial, GsParameters, InterpolationProblem, MultiplicityPoint, ParameterLimits,
-    Polynomial, ReferenceInterpolationLimits, interpolate_fast_knh, interpolate_koetter,
-    interpolate_module, interpolate_reference, interpolate_reference_nonuniform,
+    GsParameters, InterpolationProblem, MultiplicityPoint, ParameterLimits,
+    ReferenceInterpolationLimits, interpolate_fast_knh, interpolate_koetter, interpolate_module,
+    interpolate_reference, interpolate_reference_nonuniform,
 };
+use poly_ring::{BivariatePolynomial, Polynomial};
 
 const PARAMETER_LIMITS: ParameterLimits = ParameterLimits::new(8, 16, usize::MAX, usize::MAX);
 
-fn gf8(value: u8) -> <Gf8 as Field>::Elem {
-    Gf8::read(&[value])
+fn gf8(value: u8) -> <Gf8B as Field>::Elem {
+    Gf8B::read(&[value])
 }
 
 fn gf16(value: u16) -> <Gf16 as Field>::Elem {
@@ -34,8 +35,8 @@ fn gf16(value: u16) -> <Gf16 as Field>::Elem {
 }
 
 fn assert_nonuniform_hasse_gf8(
-    points: &[MultiplicityPoint<<Gf8 as Field>::Elem>],
-    polynomial: &BivariatePolynomial<Gf8>,
+    points: &[MultiplicityPoint<<Gf8B as Field>::Elem>],
+    polynomial: &BivariatePolynomial<Gf8B>,
 ) {
     for (point_index, point) in points.iter().enumerate() {
         for total_order in 0..point.multiplicity {
@@ -54,9 +55,9 @@ fn assert_nonuniform_hasse_gf8(
 
 fn assert_hasse_constraints_gf8(
     parameters: GsParameters,
-    points: &[<Gf8 as Field>::Elem],
-    values: &[<Gf8 as Field>::Elem],
-    polynomial: &BivariatePolynomial<Gf8>,
+    points: &[<Gf8B as Field>::Elem],
+    values: &[<Gf8B as Field>::Elem],
+    polynomial: &BivariatePolynomial<Gf8B>,
 ) {
     for point_index in 0..parameters.code_length() {
         for total_order in 0..parameters.multiplicity() {
@@ -106,14 +107,14 @@ fn assert_hasse_constraints_gf16(
 /// evaluation is within the target radius and is a root of `interpolation`.
 fn filtered_candidates_gf8(
     parameters: GsParameters,
-    points: &[<Gf8 as Field>::Elem],
-    received: &[<Gf8 as Field>::Elem],
-    interpolation: &BivariatePolynomial<Gf8>,
-) -> Vec<<Gf8 as Field>::Elem> {
+    points: &[<Gf8B as Field>::Elem],
+    received: &[<Gf8B as Field>::Elem],
+    interpolation: &BivariatePolynomial<Gf8B>,
+) -> Vec<<Gf8B as Field>::Elem> {
     (0u8..=u8::MAX)
         .filter_map(|raw| {
             let value = gf8(raw);
-            let candidate = Polynomial::<Gf8>::from_coefficients(&[value]).unwrap();
+            let candidate = Polynomial::<Gf8B>::from_coefficients(&[value]).unwrap();
             let distance = points
                 .iter()
                 .zip(received)
@@ -127,7 +128,7 @@ fn filtered_candidates_gf8(
 
 #[test]
 fn nonuniform_uniform_matches_reference() {
-    let parameters = GsParameters::new::<Gf8>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
     let points: Vec<_> = (1..=7).map(gf8).collect();
     let values: Vec<_> = points
         .iter()
@@ -135,7 +136,7 @@ fn nonuniform_uniform_matches_reference() {
         .map(|point| point.square().add(gf8(3)))
         .collect();
 
-    let uniform = interpolate_reference::<Gf8>(
+    let uniform = interpolate_reference::<Gf8B>(
         parameters,
         &points,
         &values,
@@ -158,7 +159,7 @@ fn nonuniform_uniform_matches_reference() {
         y_degree: parameters.y_degree(),
         weighted_degree: parameters.weighted_degree(),
     };
-    let nonuniform = interpolate_reference_nonuniform::<Gf8>(
+    let nonuniform = interpolate_reference_nonuniform::<Gf8B>(
         problem,
         ReferenceInterpolationLimits::new(100, 100),
     )
@@ -196,7 +197,7 @@ fn nonuniform_varying_multiplicities_satisfy_lower_sets() {
         y_degree: 2,
         weighted_degree: 6,
     };
-    let polynomial = interpolate_reference_nonuniform::<Gf8>(
+    let polynomial = interpolate_reference_nonuniform::<Gf8B>(
         problem,
         ReferenceInterpolationLimits::new(10_000, 10_000),
     )
@@ -226,7 +227,7 @@ fn nonuniform_matches_explicit_constraint_kernel() {
         y_degree: 1,
         weighted_degree: 3,
     };
-    let polynomial = interpolate_reference_nonuniform::<Gf8>(
+    let polynomial = interpolate_reference_nonuniform::<Gf8B>(
         problem,
         ReferenceInterpolationLimits::new(10_000, 10_000),
     )
@@ -293,7 +294,7 @@ fn nonuniform_rejects_zero_multiplicity_and_duplicates() {
         weighted_degree: 2,
     };
     assert!(
-        interpolate_reference_nonuniform::<Gf8>(
+        interpolate_reference_nonuniform::<Gf8B>(
             problem,
             ReferenceInterpolationLimits::new(usize::MAX, usize::MAX)
         )
@@ -319,7 +320,7 @@ fn nonuniform_rejects_zero_multiplicity_and_duplicates() {
         weighted_degree: 2,
     };
     assert!(
-        interpolate_reference_nonuniform::<Gf8>(
+        interpolate_reference_nonuniform::<Gf8B>(
             problem,
             ReferenceInterpolationLimits::new(usize::MAX, usize::MAX)
         )
@@ -331,7 +332,7 @@ fn nonuniform_rejects_zero_multiplicity_and_duplicates() {
 fn fast_knh_satisfies_hasse_constraints() {
     // The fast KNH backend must satisfy every Hasse constraint, matching the
     // Kötter and module backends on the same uniform problem.
-    let parameters = GsParameters::new::<Gf8>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(7, 2, 2, 1, 2, 4, PARAMETER_LIMITS).unwrap();
     let points: Vec<_> = (1..=7).map(gf8).collect();
     let values: Vec<_> = points
         .iter()
@@ -339,8 +340,8 @@ fn fast_knh_satisfies_hasse_constraints() {
         .map(|point| point.square().add(gf8(3)))
         .collect();
 
-    let fast = interpolate_fast_knh::<Gf8>(parameters, &points, &values).unwrap();
-    let koetter = interpolate_koetter::<Gf8>(parameters, &points, &values).unwrap();
+    let fast = interpolate_fast_knh::<Gf8B>(parameters, &points, &values).unwrap();
+    let koetter = interpolate_koetter::<Gf8B>(parameters, &points, &values).unwrap();
 
     assert!(!fast.is_zero());
     assert_hasse_constraints_gf8(parameters, &points, &values, &fast);

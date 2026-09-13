@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::DecodeScratch;
 
 use common::{DECODE_SPECS, DecodeCase};
@@ -95,7 +95,7 @@ fn decoder_matrix(criterion: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
-    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf8B>(&mut group, "gf8");
     run_field::<Gf16>(&mut group, "gf16");
     group.finish();
 }

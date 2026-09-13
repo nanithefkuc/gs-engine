@@ -17,7 +17,8 @@ use alloc::vec::Vec;
 use fgf::field::Elem;
 use fgf::kernel::FieldKernels;
 
-use crate::{ConfigError, GsParameters, Polynomial};
+use crate::{ConfigError, GsParameters};
+use poly_ring::Polynomial;
 
 use super::InterpolationError;
 

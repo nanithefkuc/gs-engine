@@ -1,10 +1,8 @@
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Field;
-use fgf::{Gf8, Gf16};
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-    Polynomial,
-};
+use fgf::{Gf8B, Gf16};
+use gs_engine::{DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);
@@ -81,7 +79,9 @@ fn decode_element<F: Field>(encoded: &str) -> F::Elem {
     );
     let bytes: Vec<_> = encoded
         .as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             let pair = std::str::from_utf8(pair).unwrap();
             u8::from_str_radix(pair, 16).unwrap()
@@ -153,7 +153,7 @@ fn canonical_gf8_candidate_set_is_frozen() {
     let fixture = parse_fixture(include_str!(
         "../external-bench/fixtures/gf8-additive-4-1-radius-2.gsf"
     ));
-    validate::<Gf8>(
+    validate::<Gf8B>(
         &fixture,
         "gf8",
         "gf2[x]/(x^8+x^4+x^3+x+1);le-polynomial-basis",

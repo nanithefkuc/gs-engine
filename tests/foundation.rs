@@ -4,7 +4,7 @@ use butterfly_fft::basis::{
 };
 use butterfly_fft::core::transform::TransformPlan;
 use fgf::field::{Elem, Field};
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::ConfigError;
 use gs_engine::geometry::{checked_product, checked_sum, try_zeroed};
 
@@ -26,7 +26,7 @@ fn element_round_trip<F: butterfly_fft::core::kernel::ButterflyKernels>() {
 
 #[test]
 fn gf8_and_gf16_plans_use_the_direct_fff_types() {
-    element_round_trip::<Gf8>();
+    element_round_trip::<Gf8B>();
     element_round_trip::<Gf16>();
 }
 

@@ -6,11 +6,12 @@ use std::time::Duration;
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use fgf::field::Elem;
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::{
-    BivariatePolynomial, GsParameters, InterpolationPlan, KoetterScratch, ModuleScratch,
-    interpolate_koetter_into, interpolate_module, interpolate_module_into,
+    GsParameters, InterpolationPlan, KoetterScratch, ModuleScratch, interpolate_koetter_into,
+    interpolate_module, interpolate_module_into,
 };
+use poly_ring::BivariatePolynomial;
 
 use common::{
     PARAMETER_LIMITS, backend_name, element, generated_polynomial, measure_allocations,
@@ -232,9 +233,9 @@ fn interpolation(criterion: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
-    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf8B>(&mut group, "gf8");
     run_field::<Gf16>(&mut group, "gf16");
-    run_domain::<Gf8>(&mut group, "gf8");
+    run_domain::<Gf8B>(&mut group, "gf8");
     run_domain::<Gf16>(&mut group, "gf16");
     group.finish();
 }

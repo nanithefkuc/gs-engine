@@ -1,15 +1,16 @@
 use fgf::field::Field;
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::{
-    AlekhnovichLimits, DecodeError, DecodeScratch, DomainError, EvaluationBackend,
-    EvaluationDomain, GsParameters, GsPlan, ParameterLimits, Polynomial,
+    DecodeError, DecodeScratch, DomainError, EvaluationBackend, EvaluationDomain, GsParameters,
+    GsPlan, ParameterLimits,
 };
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 const ROOT_LIMITS: AlekhnovichLimits =
     AlekhnovichLimits::new(10_000_000, 1_000_000, usize::MAX, usize::MAX, 256);
 
-fn gf8(value: u8) -> <Gf8 as Field>::Elem {
-    Gf8::read(&[value])
+fn gf8(value: u8) -> <Gf8B as Field>::Elem {
+    Gf8B::read(&[value])
 }
 
 fn gf16(value: u16) -> <Gf16 as Field>::Elem {
@@ -108,7 +109,8 @@ fn scored_decode_matches_decode_and_records_exact_distances() {
 
     // The scored candidates and their order match the plain decode exactly.
     let mut plain = Vec::new();
-    plan.decode_into(&received, &mut scratch, &mut plain).unwrap();
+    plan.decode_into(&received, &mut scratch, &mut plain)
+        .unwrap();
     let mut scored = Vec::new();
     let mut distances = Vec::new();
     let count = plan
@@ -151,8 +153,8 @@ fn scored_decode_matches_decode_and_records_exact_distances() {
 #[test]
 fn small_gf8_decode_matches_every_bounded_polynomial_and_butterfly_fft() {
     let parameter_limits = ParameterLimits::new(4, 8, usize::MAX, usize::MAX);
-    let parameters = GsParameters::new::<Gf8>(4, 0, 2, 1, 2, 1, parameter_limits).unwrap();
-    let butterfly_fft_domain = EvaluationDomain::<Gf8>::additive_subspace(4).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(4, 0, 2, 1, 2, 1, parameter_limits).unwrap();
+    let butterfly_fft_domain = EvaluationDomain::<Gf8B>::additive_subspace(4).unwrap();
     let points = butterfly_fft_domain.points().to_vec();
     let received = [gf8(7), gf8(7), gf8(9), gf8(9)];
 
@@ -171,7 +173,7 @@ fn small_gf8_decode_matches_every_bounded_polynomial_and_butterfly_fft() {
 
     let mut exhaustive = Vec::new();
     for value in u8::MIN..=u8::MAX {
-        let candidate = polynomial::<Gf8>(&[gf8(value)]);
+        let candidate = polynomial::<Gf8B>(&[gf8(value)]);
         if distance(&candidate, &points, &received) <= parameters.target_radius() {
             exhaustive.push(candidate);
         }
@@ -195,10 +197,10 @@ fn small_gf8_decode_matches_every_bounded_polynomial_and_butterfly_fft() {
 #[test]
 fn affine_coset_scoring_matches_horner() {
     let parameter_limits = ParameterLimits::new(8, 16, usize::MAX, usize::MAX);
-    let parameters = GsParameters::search::<Gf8>(8, 2, 3, parameter_limits).unwrap();
-    let coset = EvaluationDomain::<Gf8>::affine_coset(8, gf8(0x80)).unwrap();
+    let parameters = GsParameters::search::<Gf8B>(8, 2, 3, parameter_limits).unwrap();
+    let coset = EvaluationDomain::<Gf8B>::affine_coset(8, gf8(0x80)).unwrap();
     let points = coset.points().to_vec();
-    let message = polynomial::<Gf8>(&[gf8(11), gf8(29), gf8(47)]);
+    let message = polynomial::<Gf8B>(&[gf8(11), gf8(29), gf8(47)]);
     let mut received = message.evaluate_many(&points).unwrap();
     for (offset, value) in received[5..].iter_mut().enumerate() {
         *value = value.add(gf8((offset + 1) as u8));
@@ -231,7 +233,7 @@ fn affine_coset_scoring_matches_horner() {
 #[test]
 fn domain_and_received_lengths_are_validated() {
     assert!(matches!(
-        EvaluationDomain::<Gf8>::arbitrary(vec![gf8(1), gf8(2), gf8(1)]),
+        EvaluationDomain::<Gf8B>::arbitrary(vec![gf8(1), gf8(2), gf8(1)]),
         Err(DomainError::DuplicatePoint {
             first: 0,
             second: 2,
@@ -239,8 +241,8 @@ fn domain_and_received_lengths_are_validated() {
     ));
 
     let parameter_limits = ParameterLimits::new(4, 8, usize::MAX, usize::MAX);
-    let parameters = GsParameters::new::<Gf8>(4, 0, 2, 1, 2, 1, parameter_limits).unwrap();
-    let short_domain = EvaluationDomain::<Gf8>::arbitrary(vec![gf8(0), gf8(1)]).unwrap();
+    let parameters = GsParameters::new::<Gf8B>(4, 0, 2, 1, 2, 1, parameter_limits).unwrap();
+    let short_domain = EvaluationDomain::<Gf8B>::arbitrary(vec![gf8(0), gf8(1)]).unwrap();
     assert!(matches!(
         GsPlan::new(parameters, short_domain, ROOT_LIMITS),
         Err(DecodeError::Domain(DomainError::LengthMismatch {
@@ -251,11 +253,11 @@ fn domain_and_received_lengths_are_validated() {
 
     let plan = GsPlan::new(
         parameters,
-        EvaluationDomain::<Gf8>::additive_subspace(4).unwrap(),
+        EvaluationDomain::<Gf8B>::additive_subspace(4).unwrap(),
         ROOT_LIMITS,
     )
     .unwrap();
-    let mut output = vec![polynomial::<Gf8>(&[gf8(99)])];
+    let mut output = vec![polynomial::<Gf8B>(&[gf8(99)])];
     assert_eq!(
         plan.decode_into(&[gf8(0); 3], &mut DecodeScratch::new(), &mut output),
         Err(DecodeError::ReceivedLength {

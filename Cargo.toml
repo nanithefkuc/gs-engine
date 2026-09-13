@@ -50,9 +50,13 @@ required-features = ["parallel"]
 harness = false
 
 [dependencies]
-butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
-fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
-gfm = { git = "https://github.com/nanithefkuc/gfm", rev = "ad6c35b1d1de1c7f6862bf319dbe0727b889837a", default-features = false }
+# The same landed field/transform/ring sources the closure resolves, so one
+# copy of each compiles. `poly-ring` takes `fft` unconditionally: the public
+# decoder and root-lifting path requires the transform composition.
+butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "7a682acae356ee2ae99596a16b92ba9b8e5c0451", default-features = false }
+fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "b33b441bcff60da80354bfee6050db4aeab6295c", default-features = false }
+poly-ring = { git = "https://github.com/nanithefkuc/poly-ring", rev = "091164ee4e547c54012a3cab994813c3c825d70c", default-features = false, features = ["fft"] }
+gfm = { git = "https://github.com/nanithefkuc/gfm", rev = "b5878f5c110c90248ef64cdf248f35c9a70e3bef", default-features = false }
 rayon = { version = "1", optional = true }
 
 

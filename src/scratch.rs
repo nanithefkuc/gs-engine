@@ -5,7 +5,8 @@ use butterfly_fft::core::kernel::ButterflyKernels;
 
 use crate::geometry::checked_product;
 use crate::interpolation::{ModuleScratch, ReencodeScratch};
-use crate::{AlekhnovichScratch, BivariatePolynomial, ConfigError, KoetterScratch, Polynomial};
+use crate::{ConfigError, KoetterScratch};
+use poly_ring::{AlekhnovichScratch, BivariatePolynomial, Polynomial};
 
 /// Caller-owned reusable workspaces used by end-to-end decoding.
 pub struct DecodeScratch<F: ButterflyKernels> {

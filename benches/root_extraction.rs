@@ -6,10 +6,11 @@ use std::time::Duration;
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use fgf::field::Elem;
-use fgf::{Gf8, Gf16};
-use gs_engine::{
-    AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, GsParameters, Polynomial,
-    RothRuckensteinLimits, alekhnovich_roots, interpolate_module, roth_ruckenstein_roots,
+use fgf::{Gf8B, Gf16};
+use gs_engine::{GsParameters, interpolate_module};
+use poly_ring::{
+    AlekhnovichLimits, AlekhnovichScratch, BivariatePolynomial, Polynomial, RothRuckensteinLimits,
+    alekhnovich_roots, roth_ruckenstein_roots,
 };
 
 use common::{
@@ -83,7 +84,7 @@ fn benchmark_fixture<F: ButterflyKernels>(
     group.throughput(Throughput::Elements(weighted_size as u64));
 
     let (roots, roth_allocations) = measure_allocations(|| {
-        roth_ruckenstein_roots(polynomial, max_degree, ROTH_LIMITS).unwrap()
+        roth_ruckenstein_roots(polynomial.y_coefficients(), max_degree, ROTH_LIMITS).unwrap()
     });
     black_box(&roots);
     report_allocations(
@@ -93,7 +94,7 @@ fn benchmark_fixture<F: ButterflyKernels>(
     let ((scratch, roots), alekhnovich_allocations) = measure_allocations(|| {
         let mut scratch = AlekhnovichScratch::new();
         let roots = alekhnovich_roots(
-            polynomial,
+            polynomial.y_coefficients(),
             max_degree,
             FORCED_ALEKHNOVICH_LIMITS,
             &mut scratch,
@@ -115,7 +116,12 @@ fn benchmark_fixture<F: ButterflyKernels>(
         |bencher| {
             bencher.iter(|| {
                 black_box(
-                    roth_ruckenstein_roots(black_box(polynomial), max_degree, ROTH_LIMITS).unwrap(),
+                    roth_ruckenstein_roots(
+                        black_box(polynomial.y_coefficients()),
+                        max_degree,
+                        ROTH_LIMITS,
+                    )
+                    .unwrap(),
                 );
             });
         },
@@ -127,7 +133,7 @@ fn benchmark_fixture<F: ButterflyKernels>(
             bencher.iter(|| {
                 black_box(
                     alekhnovich_roots(
-                        black_box(polynomial),
+                        black_box(polynomial.y_coefficients()),
                         max_degree,
                         FORCED_ALEKHNOVICH_LIMITS,
                         &mut forced_scratch,
@@ -144,7 +150,7 @@ fn benchmark_fixture<F: ButterflyKernels>(
             bencher.iter(|| {
                 black_box(
                     alekhnovich_roots(
-                        black_box(polynomial),
+                        black_box(polynomial.y_coefficients()),
                         max_degree,
                         AUTO_LIMITS,
                         &mut auto_scratch,
@@ -181,7 +187,7 @@ fn root_extraction(criterion: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
-    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf8B>(&mut group, "gf8");
     run_field::<Gf16>(&mut group, "gf16");
     group.finish();
 }

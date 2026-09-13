@@ -6,8 +6,8 @@ use std::time::Duration;
 use butterfly_fft::core::kernel::ButterflyKernels;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use fgf::field::Elem;
-use fgf::{Gf8, Gf16};
-use gs_engine::{PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
+use fgf::{Gf8B, Gf16};
+use poly_ring::{PolynomialProductScratch, ProductStrategy, multiply_batch_truncated};
 
 use common::{backend_name, generated_polynomial, measure_allocations, report_allocations};
 
@@ -188,7 +188,7 @@ fn generated_sparse_polynomial<F: ButterflyKernels>(
     count: usize,
     seed: u64,
     nonzero_stride: usize,
-) -> gs_engine::Polynomial<F> {
+) -> poly_ring::Polynomial<F> {
     let mut polynomial = generated_polynomial::<F>(count, seed);
     if nonzero_stride > 1 {
         for degree in 0..count.saturating_sub(1) {
@@ -205,7 +205,7 @@ fn products(criterion: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(1));
     group.measurement_time(Duration::from_secs(3));
     group.sample_size(20);
-    run_field::<Gf8>(&mut group, "gf8");
+    run_field::<Gf8B>(&mut group, "gf8");
     run_field::<Gf16>(&mut group, "gf16");
     group.finish();
 }
