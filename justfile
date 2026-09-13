@@ -18,7 +18,7 @@ EXTERNAL := "archmage rayon"
 
 # Ecosystem crates, which may depend on each other subject to the layering in
 # the umbrella README's dependency graph.
-ECOSYSTEM := "simdispatch fgf butterfly-fft polyring polymat gfm structmat fec-graph softmetric lattica ratematch funcfield univariate hasse sgraph syndrome-engine gs-engine reliability-engine bp-engine lattice-engine lc-engine systematic-rs srs mix-dpc ccrlnc raptor-q latticode ldpc contort multiplicity reed-muller polar ag-codes"
+ECOSYSTEM := "simdispatch fgf butterfly-fft poly-ring polymat gfm structmat fec-graph softmetric lattica ratematch funcfield sgraph syndrome-engine gs-engine reliability-engine bp-engine lattice-engine lc-engine systematic-rs srs mix-dpc ccrlnc raptor-q latticode ldpc contort multiplicity reed-muller polar ag-codes"
 
 # Minimum line coverage, enforced in CI (ground rule 6).
 COV_MIN := "95"
@@ -120,9 +120,11 @@ deps:
     allowed=$(printf '%s\n' {{EXTERNAL}} {{ECOSYSTEM}} {{CRATE}} | sort -u)
     # Direct dependencies only: what an approved dependency pulls in below
     # itself is that crate's business, not this crate's rule-3 surface.
-    tree=$(cargo tree -e normal --all-features --depth 1 --prefix none 2>&1) || {
-        echo "cargo tree could not resolve --all-features:" >&2
-        echo "${tree}" >&2
+    # Stderr is dropped deliberately: patch-bookkeeping advisories (e.g. an
+    # umbrella patch for a crate this graph does not use) are not dependency
+    # names and must not pollute the allowlist comparison.
+    tree=$(cargo tree -e normal --all-features --depth 1 --prefix none 2>/dev/null) || {
+        echo "cargo tree could not resolve --all-features" >&2
         exit 1
     }
     found=$(echo "${tree}" | awk 'NF {print $1}' | sed 's/^[^a-zA-Z0-9_-]*//' | sort -u)
