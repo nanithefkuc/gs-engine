@@ -53,7 +53,7 @@ harness = false
 # The same landed field/transform/ring sources the closure resolves, so one
 # copy of each compiles. `poly-ring` takes `fft` unconditionally: the public
 # decoder and root-lifting path requires the transform composition.
-butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "fec2cb8afabf13d79b6bc2f516ee04235363ceae", default-features = false }
+butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "4003687405de80ae6c2665b4b7197f4657543d9e", default-features = false }
 fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "68cae1fa058e1900e24b9eb564efeb0189ad0f78", default-features = false }
 poly-ring = { git = "https://github.com/nanithefkuc/poly-ring", rev = "48f7e8fe8a2f637e18c4fbd241849461404e21c2", default-features = false, features = ["fft"] }
 gfm = { git = "https://github.com/nanithefkuc/gfm", rev = "df76a2796b59c3b2f36b9e7ed5845c353b76bf8e", default-features = false }
