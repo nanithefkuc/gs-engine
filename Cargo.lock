@@ -228,7 +228,7 @@ checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
 [[package]]
 name = "gfm"
 version = "0.0.0"
-source = "git+https://github.com/nanithefkuc/gfm?rev=b5878f5c110c90248ef64cdf248f35c9a70e3bef#b5878f5c110c90248ef64cdf248f35c9a70e3bef"
+source = "git+https://github.com/nanithefkuc/gfm?rev=a1cad8ad05799e968ceff69317fab205ed1176d0#a1cad8ad05799e968ceff69317fab205ed1176d0"
 dependencies = [
  "fgf",
  "poly-ring",
@@ -580,7 +580,3 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[patch.unused]]
-name = "univariate"
-version = "0.0.0"
